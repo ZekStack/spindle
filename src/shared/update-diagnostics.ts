@@ -1,10 +1,7 @@
 import {
   isPrereleaseVersion, parseReleaseVersion,
-  type UpdateErrorCode, type UpdatePhase, type UpdateStatus
+  type UpdateErrorCode, type UpdatePhase, type UpdateStatus, type UpdateOperation
 } from './update-policy'
-
-export type UpdateOperation = 'check' | 'download' | 'install'
-export type UpdateInstallType = 'deb' | 'appimage' | 'nsis' | 'unknown'
 
 /** Called before transitioning to error so the last failed phase survives. */
 export function failedUpdateOperation(phase: UpdatePhase): UpdateOperation {
