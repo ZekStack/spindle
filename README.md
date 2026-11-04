@@ -46,8 +46,10 @@ also builds two unpublished RC packages and exercises the verified Debian
 installer against real dpkg state, including simulated authorization denial.
 Windows CI likewise builds and silently installs two NSIS versions in
 sequence, checking the packaged updater/IPC identity and changed application
-payload. Two-version automatic update testing on Linux Mint, AppImage and
-Windows still requires human desktop QA.
+payload. Another Ubuntu job launches two real AppImage builds and checks
+portable replacement, updater identity, running version and IPC.
+Two-version automatic update testing on Linux Mint, AppImage and Windows
+still requires human desktop QA.
 
 ## First-use workflow
 
