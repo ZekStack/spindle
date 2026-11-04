@@ -44,8 +44,10 @@ ephemeral Ubuntu runner and verifies package ownership, version and updater
 identity through the packaged application. A separate Ubuntu integration job
 also builds two unpublished RC packages and exercises the verified Debian
 installer against real dpkg state, including simulated authorization denial.
-Two-version automatic update testing on Linux Mint, AppImage and Windows
-still requires human desktop QA.
+Windows CI likewise builds and silently installs two NSIS versions in
+sequence, checking the packaged updater/IPC identity and changed application
+payload. Two-version automatic update testing on Linux Mint, AppImage and
+Windows still requires human desktop QA.
 
 ## First-use workflow
 
