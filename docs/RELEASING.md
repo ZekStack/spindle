@@ -88,6 +88,28 @@ The GitHub repo is private during early development; updater authentication
 uses the user's existing GitHub CLI token or a runtime GH_TOKEN. No credentials
 are distributed inside applications.
 
+## Native installed Debian smoke in CI
+
+The Linux CI workflow now installs the **actual generated DEB** with
+`apt-get` on a disposable GitHub-hosted Ubuntu runner, checks the installed
+package version with `dpkg-query`, and launches the installed executable
+under Xvfb in smoke mode. The running Electron main process then verifies:
+
+- The packaged updater detects the Debian format from the shipped
+  `resources/package-type` marker and reports an idle update state.
+- The running executable belongs to the installed `spindle` DEB, and its
+  Electron version matches the installed Debian version.
+- The sandboxed preload and typed renderer IPC can retrieve the workspace
+  and update status from the installed application.
+
+The existing uninstalled Electron smoke runs separately and expects updates
+to remain disabled. The installed-DEB CI test uses real `dpkg-query`, but
+it **does not** download a newer release, perform a privileged update,
+relaunch a new version, or run on Linux Mint. M0.2–M0.3 remain open for the
+two-release manual Mint check, including cancelled authorization and
+package-manager failures. Do not treat the installed-package smoke as an
+automatic update end-to-end test.
+
 ## Linux DEB updater regression QA
 
 When validating a new release from an older update-enabled build on Linux
