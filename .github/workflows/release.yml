@@ -59,6 +59,7 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Stamp release version from tag
+        shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/prepare-release.mjs --prepare "$RELEASE_TAG"
@@ -75,6 +76,7 @@ jobs:
         if: matrix.platform == 'windows'
         run: pnpm exec electron-builder --win nsis --x64 --publish never
       - name: Validate expected release packages
+        shell: bash
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
           RELEASE_PLATFORM: ${{ matrix.platform }}
@@ -109,7 +111,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         shell: bash
         run: |
-          node scripts/verify-release-artifacts.mjs --missing-checksums "$RELEASE_VERSION" dist
+          node scripts/verify-release-artifacts.mjs all "$RELEASE_VERSION" dist
           (cd dist && sha256sum *.deb *.AppImage *.exe > SHA256SUMS.txt)
       - name: Publish or update release assets
         env:
@@ -123,9 +125,7 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Release exists; replacing its downloadable assets."
             gh release upload "$RELEASE_TAG" dist/* --clobber
-            if [[ "$IS_PRERELEASE" == "true" ]]; then
-              gh release edit "$RELEASE_TAG" --prerelease --latest=false
-            fi
+            gh release edit "$RELEASE_TAG" --prerelease="$IS_PRERELEASE" --draft=false
           elif [[ "$IS_PRERELEASE" == "true" ]]; then
             gh release create "$RELEASE_TAG" dist/* \
               --verify-tag --title "Spindle $RELEASE_TAG" \

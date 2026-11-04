@@ -10,6 +10,7 @@ files:
 linux:
   icon: build/icons
   category: Development
+  syncDesktopName: true
   synopsis: GitHub repository and release manager
   description: Manage GitHub repositories, releases and workflows across organizations.
   artifactName: 'Spindle-${version}-linux-${arch}.${ext}'
