@@ -16,7 +16,8 @@ export function parseReleaseVersion(version: string): ReleaseVersion | null {
 }
 
 export function isPrereleaseVersion(version: string): boolean {
-  return parseReleaseVersion(version)?.rc !== null && parseReleaseVersion(version) !== null
+  const parsed = parseReleaseVersion(version)
+  return parsed !== null && parsed.rc !== null
 }
 
 export function isNewerRelease(current: string, candidate: string): boolean {

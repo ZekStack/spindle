@@ -54,7 +54,7 @@ function createWindow(): void {
       try {
         // Verifies that the sandboxed preload works and IPC reaches main.
         const result = await mainWindow.webContents.executeJavaScript(
-          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return false; const state = await api.getWorkspace(); return Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories); })()"
+          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return false; const state = await api.getWorkspace(); const update = await api.getUpdateStatus(); return Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories) && update.phase === 'disabled'; })()"
         )
         if (!result) throw new Error('Preload or workspace bridge unavailable')
         clearTimeout(watchdog)

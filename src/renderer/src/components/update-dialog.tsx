@@ -100,10 +100,10 @@ export function UpdateDialog() {
         </div>
         <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">{t('updateSecurityNote')}</p>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={() => void act(() =>
-            window.spindle.openGitHub('https://github.com/ZekStack/spindle/releases')
-              .then(() => status ?? { phase: 'idle', currentVersion: '—', availableVersion: null, percent: null, message: null })
-          )}>
+          <Button variant="ghost" size="sm" onClick={() => {
+            void window.spindle.openGitHub('https://github.com/ZekStack/spindle/releases')
+              .catch(() => setActionError(t('updateActionFailed')))
+          }}>
             <ExternalLink className="size-3.5"/>{t('viewReleases')}
           </Button>
           <div className="flex gap-2">

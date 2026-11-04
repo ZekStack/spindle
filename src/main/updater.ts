@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import updaterPackage from 'electron-updater'
+const { autoUpdater } = updaterPackage
 import { GitHubCredentials } from './github'
 import { isNewerRelease, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
@@ -91,7 +92,6 @@ export class UpdateManager {
 
   private fail(error: unknown): UpdateStatus {
     // Failed background checks must never crash the application.
-    if (this.state.phase === 'installing') return this.snapshot()
     return this.change({
       phase: 'error', percent: null, message: updateErrorMessage(error)
     })
@@ -121,8 +121,8 @@ export class UpdateManager {
 
   download(): Promise<UpdateStatus> {
     if (this.state.phase === 'ready') return Promise.resolve(this.snapshot())
-    if (this.state.phase !== 'available') return Promise.reject(new Error('No update is ready for download'))
     if (this.downloadJob) return this.downloadJob
+    if (this.state.phase !== 'available') return Promise.reject(new Error('No update is ready for download'))
     this.lastProgress = -1
     this.change({ phase: 'downloading', percent: 0, message: null })
     this.downloadJob = (async () => {
