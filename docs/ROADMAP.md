@@ -76,7 +76,10 @@ release pipeline that leaves users on the wrong version.
       Reject missing/ambiguous metadata **before** download or elevation.
       Engineering work: [x] strict pre-download DEB selection; [x] fail-closed
       running executable ownership and version preflight before update checks,
-      downloads and installation. **Real Linux Mint QA remains open.**
+      downloads and installation; [x] CI installs the generated DEB on a
+      GitHub-hosted Ubuntu runner and smokes packaged updater identity,
+      dpkg ownership, version equality, preload and typed IPC.
+      **Real Linux Mint upgrade QA remains open.**
 - [ ] **M0.3 — Debian install and restart.** Test a real **new RC → newer
       RC** update: single authorization, package-manager success, expected
       `dpkg-query` version, restart into the newly installed binary. Cancel
