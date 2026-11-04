@@ -140,3 +140,31 @@ A failed publication leaves the draft with any successfully uploaded assets.
 A rerun on the **same valid tag** can resume the publication, provided the
 release tag still passes the main-head safety check. Do not rerun old tags
 after the repository has advanced.
+
+## Important: rc.4 to rc.5 installation
+
+The `v0.1.0-rc.4` tag points to the commit before the custom Debian
+installer was merged. It uses the upstream DebUpdater which may invoke
+`dpkg -i` on a downloaded AppImage followed by `apt-get install -f`.
+The fix included in rc.5 cannot change the updater inside the running rc.4
+binary. Install rc.5 (or a newer RC) using the downloaded `.deb` manually
+as a one-time recovery. A later update can then exercise the corrected code.
+
+The updater now rejects a downloaded AppImage at the **download-complete**
+boundary for DEB installs. It never presents an invalid package as ready,
+and never elevates the installer for it.
+
+## Release format selection before download
+
+For a package installed through `.deb`, Spindle uses a strict `DebUpdater`
+that filters GitHub's mixed `latest-linux.yml` metadata **before any
+download starts**. It accepts exactly one matching
+`Spindle-VERSION-linux-x64.deb` entry with valid SHA-512 and passes only
+that entry to electron-updater. Missing or ambiguous Debian assets produce
+an error; the client cannot fall back to an AppImage.
+
+AppImage and Windows NSIS clients retain their respective updater
+implementations. Debian detection uses electron-builder's packaged
+`resources/package-type` marker; an unknown Linux package type has
+auto-updating disabled instead of guessing. This works for stable and
+`-rc.N` releases without depending on custom GitHub channel names.

@@ -94,3 +94,15 @@ platform-specific runtime validation. Do not describe planned features as implem
 - [x] Verify every installer, updater feed and checksum before publication
 - [x] Test partial success, API 500, permission denial and rerun idempotence
 - [ ] Exercise the draft-to-published recovery against a real GitHub API failure
+
+## Linux update package selection
+
+- [x] Refuse non-DEB downloads in installed Debian applications before showing install-ready
+- [x] Bind the downloaded Debian package to exactly one SHA-512 manifest entry
+- [x] Test mixed AppImage / DEB release manifests and wrong installer selection
+- [ ] Verify real DEB-to-DEB update from an updater-enabled installed RC
+
+- [x] Restrict Debian manifest assets before network download via strict DebUpdater
+- [x] Require one exact version-matched .deb and valid SHA-512
+- [x] Determine installation format from packaged marker; disable unknown Linux formats
+- [ ] Verify installed Debian rc.5 -> new RC update on Linux Mint
