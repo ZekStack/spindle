@@ -76,7 +76,7 @@ async function releaseDetails(gh, repository, tag) {
   if (uri.protocol !== 'https:' || uri.hostname !== 'api.github.com' ||
       uri.username || uri.password || uri.port || uri.search || uri.hash ||
       !uri.pathname.toLowerCase().startsWith(expected.toLowerCase()) ||
-      !/^\\d+$/.test(uri.pathname.slice(expected.length))) {
+      !/^\d+$/.test(uri.pathname.slice(expected.length))) {
     throw new Error('Unexpected GitHub release API URL')
   }
   const raw = await gh(['api', uri.pathname.slice(1)])
