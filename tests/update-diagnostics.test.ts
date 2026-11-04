@@ -50,6 +50,7 @@ test('diagnostic report never copies arbitrary values from an invalid version or
   assert.equal(report.includes(sensitive), false)
   assert.equal(report.includes('SENSITIVESECRET'), false)
   assert.match(report, /Platform: unknown/)
+  assert.match(report, /Channel: unknown/)
   assert.match(report, /Error category: unknown/)
   assert.match(report, /Last completed check: never/)
 })
