@@ -126,6 +126,15 @@ git tag -a v0.1.0-rc.1 -m 'Spindle v0.1.0-rc.1'
 git push origin v0.1.0-rc.1
 ```
 
+For RC releases, **Actions → Prepare RC → Run workflow** provides a
+guarded alternative to creating/pushing the tag manually. Select `main`
+and enter an unused RC tag such as `v0.1.0-rc.9`. It requires green CI on
+the exact main commit, refuses stale/reused/non-monotonic tags, then creates
+the annotated tag and explicitly dispatches the Release workflow.
+This is an **opt-in** operation; merging a PR never publishes a release.
+If a tag already exists after a failed dispatch, manually run the Release
+workflow on that tag instead of moving or recreating it.
+
 After the workflows succeed, download the packages from
 [GitHub Releases](https://github.com/ZekStack/spindle/releases).
 AppImage users should run `chmod +x Spindle-*.AppImage` before launch.
