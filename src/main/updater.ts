@@ -25,6 +25,7 @@ type UpdaterEvents = {
   on(event: 'error', callback: (error: Error) => void): unknown
 }
 type Updater = UpdaterEvents & {
+  logger?: unknown
   autoDownload: boolean
   autoInstallOnAppQuit: boolean
   allowPrerelease: boolean
@@ -83,6 +84,9 @@ export class UpdateManager {
         : 'unknown',
       failureStage: previousFailure ? 'install' : null
     }
+    // electron-updater defaults to console logging, which can include URLs
+    // or headers during authenticated release requests. Never log raw output.
+    this.updater.logger = null
     this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = false
     this.updater.allowPrerelease = isPrereleaseVersion(this.state.currentVersion)
