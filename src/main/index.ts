@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron'
-import { writeFileSync } from 'node:fs'
+import { realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GitHubClient } from './github'
@@ -50,6 +50,7 @@ function createWindow(): void {
   if (process.env.SPINDLE_SMOKE_TEST === '1') {
     const installedDebSmoke = process.env.SPINDLE_SMOKE_INSTALLED_DEB === '1'
     const installedNsisSmoke = process.env.SPINDLE_SMOKE_INSTALLED_NSIS === '1'
+    const appImageSmoke = process.env.SPINDLE_SMOKE_APPIMAGE === '1'
     const watchdog = setTimeout(() => {
       console.error('Spindle smoke test timed out')
       app.exit(1)
@@ -65,9 +66,12 @@ function createWindow(): void {
         } | null = await mainWindow.webContents.executeJavaScript(
           "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return null; const state = await api.getWorkspace(); const update = await api.getUpdateStatus(); return { workspace: Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories), phase: update.phase, installType: update.installType, version: update.currentVersion }; })()"
         )
-        if (installedDebSmoke && installedNsisSmoke) throw new Error('Conflicting native smoke modes')
-        const expectedPhase = installedDebSmoke || installedNsisSmoke ? 'idle' : 'disabled'
-        const expectedInstaller = installedDebSmoke ? 'deb' : installedNsisSmoke ? 'nsis' : 'unknown'
+        if (Number(installedDebSmoke) + Number(installedNsisSmoke) + Number(appImageSmoke) > 1) {
+          throw new Error('Conflicting native smoke modes')
+        }
+        const expectedPhase = installedDebSmoke || installedNsisSmoke || appImageSmoke ? 'idle' : 'disabled'
+        const expectedInstaller = installedDebSmoke ? 'deb'
+          : installedNsisSmoke ? 'nsis' : appImageSmoke ? 'appimage' : 'unknown'
         if (!result?.workspace || result.phase !== expectedPhase ||
             result.installType !== expectedInstaller || result.version !== app.getVersion()) {
           throw new Error('Preload, IPC or package detection smoke test failed')
@@ -83,6 +87,16 @@ function createWindow(): void {
         if (installedNsisSmoke && (!app.isPackaged || process.platform !== 'win32')) {
           throw new Error('Installed NSIS smoke must run in a packaged Windows executable')
         }
+        if (appImageSmoke) {
+          if (!app.isPackaged || process.platform !== 'linux') {
+            throw new Error('AppImage smoke must run as a packaged Linux application')
+          }
+          const expectedImage = process.env.SPINDLE_SMOKE_EXPECTED_APPIMAGE
+          if (!expectedImage || !process.env.APPIMAGE ||
+              realpathSync(process.env.APPIMAGE) !== realpathSync(expectedImage)) {
+            throw new Error('Running AppImage identity does not match the expected portable executable')
+          }
+        }
         // A Windows GUI executable may not have an attached stdout stream.
         // CI requires this proof, written only after all assertions succeed.
         const proof = process.env.SPINDLE_SMOKE_RESULT_FILE
@@ -96,7 +110,9 @@ function createWindow(): void {
           ? 'Spindle installed Debian package ownership, updater and IPC smoke passed'
           : installedNsisSmoke
             ? 'Spindle installed Windows NSIS updater and IPC smoke passed'
-            : 'Spindle Electron preload and IPC smoke test passed')
+            : appImageSmoke
+              ? 'Spindle AppImage runtime, updater identity and IPC smoke passed'
+              : 'Spindle Electron preload and IPC smoke test passed')
         app.exit(0)
       } catch (error) {
         clearTimeout(watchdog)
