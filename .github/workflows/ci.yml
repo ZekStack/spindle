@@ -83,3 +83,56 @@ jobs:
           binary="$(readlink -f "$(command -v spindle)")"
           test -x "$binary"
           xvfb-run -a timeout 45s "$binary" --no-sandbox
+
+  deb-upgrade:
+    name: Native Debian upgrade / ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build an older RC Debian installer (not published)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.9000
+          pnpm build
+          pnpm exec electron-builder --linux deb --x64 --publish never
+          cp release/Spindle-0.1.0-rc.9000-linux-x64.deb "$RUNNER_TEMP/"
+      - name: Install older RC and verify running package
+        shell: bash
+        env:
+          SPINDLE_SMOKE_TEST: '1'
+          SPINDLE_SMOKE_INSTALLED_DEB: '1'
+        run: |
+          set -euo pipefail
+          sudo apt-get install --yes "$RUNNER_TEMP/Spindle-0.1.0-rc.9000-linux-x64.deb"
+          xvfb-run -a timeout 45s /opt/Spindle/spindle --no-sandbox
+      - name: Build a newer RC Debian installer (not published)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.9001
+          pnpm build
+          pnpm exec electron-builder --linux deb --x64 --publish never
+          test -f release/Spindle-0.1.0-rc.9001-linux-x64.deb
+      - name: Test denied elevation and real verified Debian upgrade
+        env:
+          SPINDLE_NATIVE_DEB_UPGRADE: '1'
+        run: pnpm exec tsx tests/helpers/native-deb-upgrade.ts
+      - name: Verify upgraded application and updater preflight
+        shell: bash
+        env:
+          SPINDLE_SMOKE_TEST: '1'
+          SPINDLE_SMOKE_INSTALLED_DEB: '1'
+        run: |
+          set -euo pipefail
+          installed="$(dpkg-query --show --showformat='${Version}' spindle)"
+          test "$installed" = '0.1.0~rc.9001'
+          xvfb-run -a timeout 45s /opt/Spindle/spindle --no-sandbox
