@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import {
-  parseReleaseVersion, isPrereleaseVersion, isNewerRelease, updateErrorMessage
+  parseReleaseVersion, isPrereleaseVersion, isNewerRelease, isEligibleUpdate, updateErrorMessage
 } from '../src/shared/update-policy'
 import { fileURLToPath } from 'node:url'
 
@@ -21,6 +21,10 @@ test('stable and release candidate versions are compared without downgrades', ()
   assert.equal(isNewerRelease('0.2.0-rc.1', '0.1.9'), false)
   assert.equal(isNewerRelease('1.0.0', '1.0.0'), false)
   assert.equal(isNewerRelease('1.0.0', '1.0.1'), true)
+  assert.equal(isEligibleUpdate('0.1.0', '0.2.0-rc.1'), false)
+  assert.equal(isEligibleUpdate('0.1.0-rc.1', '0.1.0-rc.2'), true)
+  assert.equal(isEligibleUpdate('0.1.0-rc.2', '0.1.0'), true)
+  assert.equal(isEligibleUpdate('0.1.0', '0.1.1'), true)
   assert.equal(isNewerRelease('1.9.0', '2.0.0'), true)
 })
 

@@ -33,6 +33,12 @@ export function isNewerRelease(current: string, candidate: string): boolean {
   return b.rc > a.rc
 }
 
+/** Stable installations stay on stable releases; RC installs may advance to an RC or stable. */
+export function isEligibleUpdate(current: string, candidate: string): boolean {
+  if (!isNewerRelease(current, candidate)) return false
+  return isPrereleaseVersion(current) || !isPrereleaseVersion(candidate)
+}
+
 export type UpdatePhase =
   | 'disabled' | 'idle' | 'checking' | 'up-to-date'
   | 'available' | 'downloading' | 'ready' | 'installing' | 'error'

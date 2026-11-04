@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import updaterPackage from 'electron-updater'
 const { autoUpdater } = updaterPackage
 import { GitHubCredentials } from './github'
-import { isNewerRelease, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
+import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
 type UpdateInfo = { version: string }
 type ProgressInfo = { percent: number }
@@ -55,7 +55,7 @@ export class UpdateManager {
       if (this.state.phase !== 'downloading' && this.state.phase !== 'ready') this.change({ phase: 'checking' })
     })
     this.updater.on('update-available', (info) => {
-      if (!isNewerRelease(this.state.currentVersion, info.version)) {
+      if (!isEligibleUpdate(this.state.currentVersion, info.version)) {
         this.change({ phase: 'up-to-date', availableVersion: null })
         return
       }
