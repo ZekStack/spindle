@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+  # Prepare RC uses GITHUB_TOKEN to create an immutable tag. GitHub does not
+  # trigger push workflows for those tags, so it explicitly dispatches this
+  # workflow using the newly created tag as ref.
+  workflow_dispatch:
 
 permissions:
   contents: read
