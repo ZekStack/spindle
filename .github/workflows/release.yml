@@ -97,6 +97,49 @@ jobs:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
           RELEASE_PLATFORM: ${{ matrix.platform }}
         run: node scripts/verify-release-artifacts.mjs "$RELEASE_PLATFORM" "$RELEASE_VERSION" release
+      # Run the exact tagged installers, not the unstamped 0.1.0 CI build.
+      # All native release smoke gates must pass before the publish job starts.
+      - name: Install and smoke-test tagged Debian release
+        if: matrix.platform == 'linux'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          SPINDLE_SMOKE_TEST: '1'
+          SPINDLE_SMOKE_INSTALLED_DEB: '1'
+        run: |
+          set -euo pipefail
+          package="release/Spindle-${RELEASE_VERSION}-linux-x64.deb"
+          test -f "$package"
+          sudo apt-get install --yes "./$package"
+          installed="$(dpkg-query --show --showformat='${Version}' spindle)"
+          expected="${RELEASE_VERSION/-rc./~rc.}"
+          if [[ "$installed" != "$expected" ]]; then
+            echo "::error::Installed Debian version '$installed' differs from release '$expected'"
+            exit 1
+          fi
+          xvfb-run -a timeout 45s /opt/Spindle/spindle --no-sandbox
+      - name: Smoke-test tagged AppImage release
+        if: matrix.platform == 'linux'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          image="$(realpath "release/Spindle-${RELEASE_VERSION}-linux-x64.AppImage")"
+          test -f "$image"
+          chmod +x "$image"
+          SPINDLE_SMOKE_TEST=1 \
+          SPINDLE_SMOKE_APPIMAGE=1 \
+          SPINDLE_SMOKE_EXPECTED_APPIMAGE="$image" \
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+            xvfb-run -a timeout 120s "$image" --no-sandbox
+      - name: Install and smoke-test tagged Windows NSIS release
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          SPINDLE_RELEASE_SMOKE: '1'
+        run: ./scripts/smoke-release-nsis.ps1 -Version $env:RELEASE_VERSION
       - name: Upload platform packages
         uses: actions/upload-artifact@v4
         with:
