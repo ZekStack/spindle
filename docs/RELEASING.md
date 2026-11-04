@@ -185,9 +185,14 @@ release-only workflow syntax problems can be detected before a tag push.
 
 The `v0.1.0-rc.6` workflow failed before any build or publication jobs ran;
 GitHub's Jobs API exposes only skipped downstream jobs, not a failing
-validation step. The exact cause is not established by the available logs.
-That tag is already pushed, so do not move or reuse it. After merging the
-next reliability PR, choose **a new RC number** (for example `rc.7`) from
-the latest `main`. Confirm a real release has appeared with complete
-packages, both updater manifests, SHA256SUMS, and successful GitHub Actions
-jobs before marking roadmap item M0.1 done.
+validation step. The exact cause was not established by the available logs.
+Do not move or reuse that tag.
+
+On November 4, 2026, `v0.1.0-rc.7` **successfully** passed tag validation,
+both platform builds and GitHub Release publication. GitHub lists the
+Linux DEB/AppImage, Windows NSIS installer, both updater manifests,
+`SHA256SUMS.txt`, and the Windows blockmap with upload-time SHA-256 digests.
+This verifies that the prior publishing workflow can complete. The new
+digest-matching publisher should be exercised with a subsequent fresh RC
+tag after its PR is merged. Always tag the current `main` commit; never
+reuse or force-move old release tags.
