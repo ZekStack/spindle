@@ -110,6 +110,25 @@ two-release manual Mint check, including cancelled authorization and
 package-manager failures. Do not treat the installed-package smoke as an
 automatic update end-to-end test.
 
+## Two-version Windows NSIS upgrade integration (M0.4)
+
+The Windows CI workflow builds two **unpublished** `0.1.0-rc.9000` and
+`0.1.0-rc.9001` NSIS installers from the same source commit. It runs each
+installer silently (`/S`) into the same test directory on an ephemeral
+GitHub-hosted Windows runner. After each installation it launches the
+packaged `spindle.exe` in smoke mode, which verifies the sandboxed preload,
+IPC, the NSIS updater identity, and the running Electron app version. The
+running application emits a test-only result file after those assertions
+pass, so Windows GUI processes need not have attached stdout. The test also
+checks the `app.asar` payload changed between versions.
+
+This checks real NSIS installation and replacement. It does **not** exercise
+GitHub Releases, the electron-updater download, permission prompts,
+automatic restart, or interactive cancellation/failure recovery. The two RC
+numbers are synthetic CI fixtures, never published or tagged. M0.4 remains
+open until installed Windows and AppImage clients complete genuine updater
+flows with two successive published release versions.
+
 ## Two-version Debian package upgrade integration (M0.3)
 
 The additional Ubuntu CI job creates two **temporary, unpublished** DEB
