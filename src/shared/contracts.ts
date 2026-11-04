@@ -62,6 +62,7 @@ export interface SpindleApi {
   checkForUpdates(): Promise<UpdateStatus>
   downloadUpdate(): Promise<UpdateStatus>
   installUpdate(): Promise<UpdateStatus>
+  copyUpdateDiagnostics(): Promise<void>
   onUpdateStatus(listener: (state: UpdateStatus) => void): () => void
 }
 export const LOGIN_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
