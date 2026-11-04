@@ -20,6 +20,7 @@ const api: SpindleApi = {
   checkForUpdates: () => ipcRenderer.invoke('spindle:update:check'),
   downloadUpdate: () => ipcRenderer.invoke('spindle:update:download'),
   installUpdate: () => ipcRenderer.invoke('spindle:update:install'),
+  copyUpdateDiagnostics: () => ipcRenderer.invoke('spindle:update:copy-diagnostics'),
   onUpdateStatus: (listener: (state: UpdateStatus) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, state: UpdateStatus) => listener(state)
     ipcRenderer.on('spindle:update:status', handler)
