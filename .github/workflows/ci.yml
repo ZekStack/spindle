@@ -61,28 +61,10 @@ jobs:
         env:
           SPINDLE_SMOKE_TEST: '1'
         run: xvfb-run -a timeout 45s pnpm exec electron . --no-sandbox
-      - name: Install and smoke-test the generated Debian package
+      - name: Install and smoke-test generated Linux DEB and AppImage
         if: runner.os == 'Linux'
         shell: bash
-        env:
-          SPINDLE_SMOKE_TEST: '1'
-          SPINDLE_SMOKE_INSTALLED_DEB: '1'
-        run: |
-          set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          package="release/Spindle-${version}-linux-x64.deb"
-          test -f "$package"
-          # Install the actual .deb on this ephemeral hosted runner, including
-          # its declared runtime dependencies. No mock dpkg/pkexec is involved.
-          sudo apt-get install --yes "./$package"
-          installed="$(dpkg-query --show --showformat='${Version}' spindle)"
-          if [[ "$installed" != "$version" ]]; then
-            echo "::error::Installed Debian version does not match package metadata"
-            exit 1
-          fi
-          binary="$(readlink -f "$(command -v spindle)")"
-          test -x "$binary"
-          xvfb-run -a timeout 45s "$binary" --no-sandbox
+        run: bash scripts/smoke-release-linux.sh "$(node -p "require('./package.json').version")"
 
   deb-upgrade:
     name: Native Debian upgrade / ubuntu-latest
@@ -171,6 +153,11 @@ jobs:
       - name: Verify real silent NSIS install and upgrade
         shell: pwsh
         run: ./scripts/test-nsis-upgrade.ps1
+      - name: Validate tagged NSIS release smoke using unpublished CI fixture
+        shell: pwsh
+        env:
+          SPINDLE_RELEASE_SMOKE: '1'
+        run: ./scripts/smoke-release-nsis.ps1 -Version 0.1.0-rc.9001
 
   appimage-upgrade:
     name: Native AppImage replacement / ubuntu-latest

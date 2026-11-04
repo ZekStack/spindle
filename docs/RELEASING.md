@@ -28,6 +28,35 @@ git push origin v0.1.0-rc.1
 4. Observe the **Release** GitHub Actions workflow.
 5. After success, download the assets from the corresponding GitHub release.
 
+## Native installer smoke gate on release tags
+
+The tagged **Release** workflow now tests its actual tag-stamped installers
+before uploading artifacts or publishing a GitHub Release. This differs
+from ordinary PR CI, where the package version is the unstamped source
+version, and from synthetic two-version CI upgrades.
+
+After the existing build, manifest and asset checks, the Linux builder:
+
+- Installs its exact release-version `.deb` using APT on the ephemeral
+  Ubuntu runner and verifies the real `dpkg-query` version.
+- Launches the installed `/opt/Spindle/spindle` under Xvfb. The built-in
+  smoke test checks the active DEB updater identity, Electron version,
+  sandboxed preload and renderer IPC.
+- Launches the actual `.AppImage` under Xvfb using the supported
+  `APPIMAGE_EXTRACT_AND_RUN=1` fallback (no FUSE requirement). It checks
+  the AppImage runtime path, updater identity, running version and IPC.
+
+The Windows builder silently installs its exact tagged NSIS package to an
+isolated, non-system directory on the disposable runner. It launches the
+installed executable, checks `nsis` updater identity, Electron version,
+preload and IPC, and requires a test-only result file.
+
+**All checks must pass before the publish job can run.** None downloads a
+newer release or tests the interactive authorization/restart handoff;
+the full two-version Mint/AppImage/Windows update QA in M0.2–M0.5 remains
+open. These checks protect against shipping a tagged installer that cannot
+launch or whose packaged version does not match the tag.
+
 ## Files available on each release
 
 | Platform | File |
