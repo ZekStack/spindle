@@ -110,6 +110,32 @@ two-release manual Mint check, including cancelled authorization and
 package-manager failures. Do not treat the installed-package smoke as an
 automatic update end-to-end test.
 
+## Two-version Debian package upgrade integration (M0.3)
+
+The additional Ubuntu CI job creates two **temporary, unpublished** DEB
+installers from the checked-out commit, stamped `0.1.0-rc.9000` and
+`0.1.0-rc.9001`. It installs the older build through APT, verifies that
+its Electron app and the installed package agree, then exercises the
+production `installVerifiedDeb` implementation against the new DEB:
+
+- The installer validates package ownership, downloaded-file regularity,
+  SHA-512, Debian package name/version and the final installed version.
+- A simulated denied `pkexec` request must produce `package-manager`
+  failure and leave the old package installed.
+- For the successful integration path only, a CI adapter substitutes
+  passwordless `sudo /usr/bin/dpkg --install` for the normal interactive
+  `pkexec /usr/bin/dpkg --install`. The arguments and all other verification
+  steps remain unchanged.
+- The newly installed Electron executable is launched under Xvfb and must
+  pass the packaged preload/IPC and real Debian ownership/version smoke.
+
+These version numbers are **test fixtures**, not intended GitHub tags or
+release candidates for users. The test does not contact GitHub, download via
+electron-updater, exercise a real polkit authorization dialog, or prove that
+Spindle relaunches automatically after an update. M0.2–M0.3 remain open
+until the actual release-to-release update works on Linux Mint, including
+the cancellation and restart paths.
+
 ## Linux DEB updater regression QA
 
 When validating a new release from an older update-enabled build on Linux
