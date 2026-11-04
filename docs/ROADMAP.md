@@ -63,6 +63,11 @@ release pipeline that leaves users on the wrong version.
       Linux/Windows builders pass, checksums and both update manifests are
       uploaded, and the GitHub Release becomes visible. Test transient upload
       failures/resume without moving existing tags.
+      Engineering work completed: [x] SHA-256 digest matching of all release
+      assets instead of trusting size alone; [x] explicit 404-versus-403/5xx
+      release lookup; [x] fail-safe behavior for already-published assets;
+      [x] GitHub Actions workflow lint in CI. **Runtime gate remains open**
+      until a new tag completes real GitHub Release publication.
 - [ ] **M0.2 — Debian format selection.** On an installed Mint/Ubuntu DEB,
       inspect the running package type, confirm the network download is
       `.deb` (never `.AppImage`), and confirm it matches the release SHA-512.
@@ -253,7 +258,11 @@ passing release/update validation.
 6. **Do not merge on green CI alone** when a stage requires a real GitHub or
    OS-level action; record a short manual QA matrix with results.
 
-**Next action:** close **M0**, starting with the failed latest tag-push run
+**Next action:** close **M0**, starting with release validation for a fresh
+tag. The `v0.1.0-rc.6` run ended in failure with only skipped downstream jobs
+and no validation job exposed via GitHub's Jobs API; this is **not** evidence
+that a specific publisher command failed. Do not mark M0.1 complete before
+a real tag succeeds. Continue with the failed latest tag-push run
 and an actual Debian-to-Debian update between two *newer* releases. Only
 then begin M1 and M2. Feature development should not hide an unverified
 installation path.
