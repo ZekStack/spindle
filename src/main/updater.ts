@@ -7,6 +7,7 @@ import { DebInstallError, installVerifiedDeb } from './deb-install'
 import { selectDownloadedDeb } from './deb-download'
 import { SpindleDebUpdater } from './strict-deb-updater'
 import { detectLinuxPackage } from './package-type'
+import { verifyRunningDebPackage } from './deb-preflight'
 import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
 import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
@@ -50,6 +51,7 @@ export class UpdateManager {
   private downloadedDeb: { file: string; version: string; sha512: string } | null = null
   private installJob: Promise<UpdateStatus> | null = null
   private readonly attemptFile: string | null
+  private readonly linuxPackage: ReturnType<typeof detectLinuxPackage>
 
   constructor(
     private readonly updater: Updater = desktopUpdater(),
@@ -63,13 +65,14 @@ export class UpdateManager {
       }
     }
   ) {
+    this.linuxPackage = runtime.platform === 'linux' ? detectLinuxPackage(process.resourcesPath) : 'unknown'
     this.attemptFile = runtime.isPackaged ? join(app.getPath('userData'), 'update-attempt.json') : null
     const previousFailure = this.attemptFile !== null &&
       previousInstallUnapplied(this.attemptFile, runtime.getVersion())
     this.state = {
       phase: previousFailure ? 'error' :
         runtime.isPackaged && (runtime.platform === 'win32' ||
-          (runtime.platform === 'linux' && detectLinuxPackage(process.resourcesPath) !== 'unknown'))
+          (runtime.platform === 'linux' && this.linuxPackage !== 'unknown'))
           ? 'idle' : 'disabled',
       currentVersion: runtime.getVersion(), availableVersion: null, percent: null,
       message: previousFailure ? 'not-installed' : null
@@ -105,7 +108,7 @@ export class UpdateManager {
     })
     this.updater.on('update-downloaded', (info) => {
       if (this.state.phase === 'downloading' && this.state.availableVersion === info.version) {
-        if (this.runtime.platform === 'linux' && !process.env.APPIMAGE) {
+        if (this.linuxPackage === 'deb') {
           try {
             // A Linux feed can contain both AppImage and DEB assets.
             // Never hand an AppImage to a Debian package installer, even
@@ -154,6 +157,9 @@ export class UpdateManager {
       try {
         // GitHub is currently private. Authentication stays exclusively in main.
         // Anonymous public update checks work once the repository is made public.
+        if (this.linuxPackage === 'deb') {
+          await verifyRunningDebPackage(process.execPath, this.state.currentVersion)
+        }
         const auth = await this.credentials.get()
         this.updater.setFeedURL({
           provider: 'github', owner: 'ZekStack', repo: 'spindle',
@@ -175,8 +181,12 @@ export class UpdateManager {
     this.downloadedDeb = null
     this.change({ phase: 'downloading', percent: 0, message: null })
     this.downloadJob = (async () => {
-      try { await this.updater.downloadUpdate() }
-      catch (error) { this.fail(error) }
+      try {
+        if (this.linuxPackage === 'deb') {
+          await verifyRunningDebPackage(process.execPath, this.state.currentVersion)
+        }
+        await this.updater.downloadUpdate()
+      } catch (error) { this.fail(error) }
       return this.snapshot()
     })().finally(() => { this.downloadJob = null })
     return this.downloadJob
@@ -191,9 +201,10 @@ export class UpdateManager {
     this.change({ phase: 'installing', message: null })
     this.installJob = (async () => {
       try {
-        if (this.runtime.platform === 'linux' && !process.env.APPIMAGE) {
+        if (this.linuxPackage === 'deb') {
           // Linux DEB installation needs privilege elevation. Wait for dpkg's
           // actual result: quitAndInstall can relaunch even after an install fails.
+          await verifyRunningDebPackage(process.execPath, this.state.currentVersion)
           const deb = this.downloadedDeb
           if (!deb || deb.version !== target) {
             throw new DebInstallError('verification', 'No verified DEB download for this version')

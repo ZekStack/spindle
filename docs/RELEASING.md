@@ -48,10 +48,10 @@ Build jobs never publish individual partial releases. All three installer
 filenames must be present before the release-publishing job continues.
 
 The publishing job uses the GitHub-provided token; only that job has
-`contents: write`. It checks for an existing release on rerun and replaces
-its uploaded assets without moving or recreating the git tag. Replacing assets
-is incompatible with immutable releases; where immutability is enabled,
-publish a new version rather than trying to replace a released artifact.
+`contents: write`. It checks for an existing release on rerun, resumes matching draft
+uploads, and repairs conflicting **draft** assets before publishing. It never
+replaces conflicting assets on an already published release. Published assets
+with matching SHA-256 digests are left unchanged; use a new tag for fixes.
 
 Tags are never force-moved by the release workflow. Use a new version (or RC
 counter) to correct an already published release.
@@ -108,6 +108,22 @@ Mint or another Debian-based distribution:
 The DEB path runs `pkexec /usr/bin/dpkg --install <verified-file>` using
 argument arrays, not shell commands. It verifies both the downloaded
 SHA-512 digest and the installed dpkg version before relaunching.
+
+## Debian updater preflight (M0.2)
+
+Packaged Debian builds verify that the running executable belongs to the
+installed `spindle` package and that `dpkg-query` reports the same version
+as the running application. This runs **before checking GitHub**, before
+download, and again before installation. A stale or unrelated launcher fails
+closed, without fetching an installer or requesting elevation. A Debian RC
+version such as `0.1.0~rc.8` matches Electron's `0.1.0-rc.8`.
+
+CI tests mock `dpkg-query`; they do not establish real OS behavior. For
+Linux Mint QA, record the running version, installed package version, active
+launcher path, selected downloaded artifact type, elevated install result, and
+version after restart. Cancel elevation and verify the old app stays open,
+showing a failure. Use two real installed DEB releases, not an unpacked
+Electron build. The new preflight must be verified on a future tagged build.
 
 ## Release tag safety and transient GitHub API failures
 
