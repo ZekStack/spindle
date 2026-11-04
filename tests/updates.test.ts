@@ -26,7 +26,7 @@ test('stable and release candidate versions are compared without downgrades', ()
 
 test('invalid release versions never become installable', () => {
   for (const candidate of ['1.1', '1.1.0-beta.1', 'v01.0.0', 'v1.0.0-rc.01',
-    '1.0.0+meta', '1.0.0-rc.-1', '1.0.0;rm -rf /', '1.0.0-rc.a', '']) {
+    '1.0.0+meta', '1.0.0-rc.-1', '1.0.0;invalid', '1.0.0-rc.a', '']) {
     assert.equal(parseReleaseVersion(candidate), null)
     assert.equal(isNewerRelease('0.1.0', candidate), false)
   }
@@ -58,6 +58,6 @@ test('release metadata must contain every platform artifact and SHA-512', () => 
     assert.doesNotThrow(() => verify('windows'))
     writeFileSync(join(dir, 'latest-linux.yml'),
       'version: 0.2.0-rc.1\nfiles:\n  - url: Spindle-0.2.0-rc.1-linux-x64.AppImage\n    sha512: ' + sha + '\n')
-    assert.throws(() => verifyUpdateMetadata('all', '0.2.0-rc.1', dir), /missing installer/i)
+    assert.throws(() => verify('all'), /missing installer/i)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
