@@ -5,6 +5,8 @@ const { autoUpdater } = updaterPackage
 import { GitHubCredentials } from './github'
 import { DebInstallError, installVerifiedDeb } from './deb-install'
 import { selectDownloadedDeb } from './deb-download'
+import { SpindleDebUpdater } from './strict-deb-updater'
+import { detectLinuxPackage } from './package-type'
 import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
 import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
@@ -32,6 +34,14 @@ type Updater = UpdaterEvents & {
 }
 type Runtime = { isPackaged: boolean; getVersion(): string; platform: string }
 
+function desktopUpdater(): Updater {
+  if (process.platform === 'linux' && detectLinuxPackage(process.resourcesPath) === 'deb') {
+    return new SpindleDebUpdater()
+  }
+  return autoUpdater
+}
+
+
 export class UpdateManager {
   private state: UpdateStatus
   private checkJob: Promise<UpdateStatus> | null = null
@@ -42,7 +52,7 @@ export class UpdateManager {
   private readonly attemptFile: string | null
 
   constructor(
-    private readonly updater: Updater = autoUpdater,
+    private readonly updater: Updater = desktopUpdater(),
     private readonly credentials = new GitHubCredentials(),
     private readonly runtime: Runtime = {
       isPackaged: app.isPackaged, getVersion: () => app.getVersion(), platform: process.platform
@@ -58,7 +68,9 @@ export class UpdateManager {
       previousInstallUnapplied(this.attemptFile, runtime.getVersion())
     this.state = {
       phase: previousFailure ? 'error' :
-        runtime.isPackaged && ['win32', 'linux'].includes(runtime.platform) ? 'idle' : 'disabled',
+        runtime.isPackaged && (runtime.platform === 'win32' ||
+          (runtime.platform === 'linux' && detectLinuxPackage(process.resourcesPath) !== 'unknown'))
+          ? 'idle' : 'disabled',
       currentVersion: runtime.getVersion(), availableVersion: null, percent: null,
       message: previousFailure ? 'not-installed' : null
     }

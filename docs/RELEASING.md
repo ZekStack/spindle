@@ -153,3 +153,18 @@ as a one-time recovery. A later update can then exercise the corrected code.
 The updater now rejects a downloaded AppImage at the **download-complete**
 boundary for DEB installs. It never presents an invalid package as ready,
 and never elevates the installer for it.
+
+## Release format selection before download
+
+For a package installed through `.deb`, Spindle uses a strict `DebUpdater`
+that filters GitHub's mixed `latest-linux.yml` metadata **before any
+download starts**. It accepts exactly one matching
+`Spindle-VERSION-linux-x64.deb` entry with valid SHA-512 and passes only
+that entry to electron-updater. Missing or ambiguous Debian assets produce
+an error; the client cannot fall back to an AppImage.
+
+AppImage and Windows NSIS clients retain their respective updater
+implementations. Debian detection uses electron-builder's packaged
+`resources/package-type` marker; an unknown Linux package type has
+auto-updating disabled instead of guessing. This works for stable and
+`-rc.N` releases without depending on custom GitHub channel names.
