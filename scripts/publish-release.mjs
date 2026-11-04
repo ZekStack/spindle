@@ -28,7 +28,7 @@ function transient(error) {
 
 function isNotFound(error) {
   const message = error instanceof Error ? error.message : String(error)
-  return /\bHTTP\s+404\b|\bNot Found\s+\(HTTP\s+404\)/i.test(message)
+  return /\bHTTP\s+404\b|\bNot Found\s+\(HTTP\s+404\)|\bno release found for\b|\brelease not found\b/i.test(message)
 }
 
 async function retry(label, task, sleep) {
@@ -67,14 +67,24 @@ async function localAssets(directory, version) {
 }
 
 async function releaseDetails(gh, repository, tag) {
-  // REST exposes GitHub's immutable SHA-256 digest for every release asset.
-  // The CLI's "release view --json assets" schema is not guaranteed to
-  // expose this digest, so use the REST endpoint explicitly.
-  const raw = await gh(['api', 'repos/' + repository + '/releases/tags/' + tag])
+  // The REST /releases/tags/{tag} endpoint is for *published* releases.
+  // gh release view can resolve drafts with write access, giving the
+  // numeric release ID. Fetch that ID through REST for SHA-256 digests.
+  const view = JSON.parse(await gh(['release', 'view', tag, '--json', 'apiUrl']))
+  const uri = new URL(view.apiUrl)
+  const expected = '/repos/' + repository + '/releases/'
+  if (uri.protocol !== 'https:' || uri.hostname !== 'api.github.com' ||
+      uri.username || uri.password || uri.port || uri.search || uri.hash ||
+      !uri.pathname.toLowerCase().startsWith(expected.toLowerCase()) ||
+      !/^\\d+$/.test(uri.pathname.slice(expected.length))) {
+    throw new Error('Unexpected GitHub release API URL')
+  }
+  const raw = await gh(['api', uri.pathname.slice(1)])
   const data = JSON.parse(raw)
   if (!Array.isArray(data.assets) ||
-      typeof data.draft !== 'boolean' || typeof data.prerelease !== 'boolean') {
-    throw new Error('GitHub returned incomplete release details')
+      typeof data.draft !== 'boolean' || typeof data.prerelease !== 'boolean' ||
+      data.tag_name !== tag) {
+    throw new Error('GitHub returned incomplete or mismatched release details')
   }
   return data
 }
