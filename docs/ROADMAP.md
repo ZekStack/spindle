@@ -78,7 +78,8 @@ release pipeline that leaves users on the wrong version.
       running executable ownership and version preflight before update checks,
       downloads and installation; [x] CI installs the generated DEB on a
       GitHub-hosted Ubuntu runner and smokes packaged updater identity,
-      dpkg ownership, version equality, preload and typed IPC.
+      dpkg ownership, version equality, preload and typed IPC; [x] release
+      pipeline installs and smoke-tests the exact tagged DEB before publish.
       **Real Linux Mint upgrade QA remains open.**
 - [ ] **M0.3 — Debian install and restart.** Test a real **new RC → newer
       RC** update: single authorization, package-manager success, expected
@@ -100,9 +101,10 @@ release pipeline that leaves users on the wrong version.
       and checks the installed payload changes; [x] Linux CI builds two
       unpublished AppImages, launches each with its real runtime and portable
       executable path, verifies the running updater identity/version/IPC, and
-      checks executable replacement. **Real electron-updater
-      download/restart, user consent/cancel, and published-release QA remain
-      open for both platforms.**
+      checks executable replacement; [x] the release pipeline also launches
+      the tagged AppImage and installs/launches the tagged NSIS package on
+      native runners before publish. **Real electron-updater download/restart,
+      user consent/cancel, and published-release QA remain open.**
 - [ ] **M0.5 — Channel/diagnostic QA.** Stable installations must ignore RCs;
       RC installations may advance to newer RCs and stable builds. Keep
       credentials out of logs and renderer errors; provide useful diagnostic
