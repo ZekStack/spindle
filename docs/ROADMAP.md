@@ -76,3 +76,12 @@ platform-specific runtime validation. Do not describe planned features as implem
 - [x] Generate and publish updater metadata for Windows, AppImage and DEB
 - [ ] Validate end-to-end update across two actual tagged releases on all three installer formats
 - [ ] Sign update manifests/installers before public distribution
+
+## Linux updater reliability
+
+- [x] Wait for Debian system package installation to complete before relaunch
+- [x] Confirm checksum, package identity and installed package version
+- [x] Detect running an AppImage/unmanaged copy instead of the DEB installation
+- [x] Remember failed update handoffs to prevent immediate repeated prompts
+- [x] Translate installation failure modes and add regression tests
+- [ ] Test the complete DEB update and cancellation on a Linux Mint desktop

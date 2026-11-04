@@ -1,10 +1,17 @@
 import { app, BrowserWindow } from 'electron'
+import { join } from 'node:path'
 import updaterPackage from 'electron-updater'
 const { autoUpdater } = updaterPackage
 import { GitHubCredentials } from './github'
+import { DebInstallError, installVerifiedDeb } from './deb-install'
+import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
 import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
-type UpdateInfo = { version: string }
+type UpdateInfo = {
+  version: string
+  downloadedFile?: string
+  files?: { url: string; sha512?: string }[]
+}
 type ProgressInfo = { percent: number }
 type UpdaterEvents = {
   on(event: 'checking-for-update', callback: () => void): unknown
@@ -29,6 +36,9 @@ export class UpdateManager {
   private checkJob: Promise<UpdateStatus> | null = null
   private downloadJob: Promise<UpdateStatus> | null = null
   private lastProgress = -1
+  private downloadedDeb: { file: string; version: string; sha512: string } | null = null
+  private installJob: Promise<UpdateStatus> | null = null
+  private readonly attemptFile: string | null
 
   constructor(
     private readonly updater: Updater = autoUpdater,
@@ -42,9 +52,14 @@ export class UpdateManager {
       }
     }
   ) {
+    this.attemptFile = runtime.isPackaged ? join(app.getPath('userData'), 'update-attempt.json') : null
+    const previousFailure = this.attemptFile !== null &&
+      previousInstallUnapplied(this.attemptFile, runtime.getVersion())
     this.state = {
-      phase: runtime.isPackaged && ['win32', 'linux'].includes(runtime.platform) ? 'idle' : 'disabled',
-      currentVersion: runtime.getVersion(), availableVersion: null, percent: null, message: null
+      phase: previousFailure ? 'error' :
+        runtime.isPackaged && ['win32', 'linux'].includes(runtime.platform) ? 'idle' : 'disabled',
+      currentVersion: runtime.getVersion(), availableVersion: null, percent: null,
+      message: previousFailure ? 'not-installed' : null
     }
     this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = false
@@ -55,6 +70,7 @@ export class UpdateManager {
       if (this.state.phase !== 'downloading' && this.state.phase !== 'ready') this.change({ phase: 'checking' })
     })
     this.updater.on('update-available', (info) => {
+      this.downloadedDeb = null
       if (!isEligibleUpdate(this.state.currentVersion, info.version)) {
         this.change({ phase: 'up-to-date', availableVersion: null })
         return
@@ -76,6 +92,11 @@ export class UpdateManager {
     })
     this.updater.on('update-downloaded', (info) => {
       if (this.state.phase === 'downloading' && this.state.availableVersion === info.version) {
+        const deb = info.files?.find((entry) => entry.url.split('?')[0].endsWith('.deb'))
+        const checksum = deb?.sha512
+        this.downloadedDeb = checksum && info.downloadedFile?.endsWith('.deb')
+          ? { file: info.downloadedFile, version: info.version, sha512: checksum }
+          : null
         this.change({ phase: 'ready', percent: 100, message: null })
       }
     })
@@ -91,13 +112,20 @@ export class UpdateManager {
   }
 
   private fail(error: unknown): UpdateStatus {
-    // Failed background checks must never crash the application.
-    return this.change({
-      phase: 'error', percent: null, message: updateErrorMessage(error)
-    })
+    // Never expose process output or credential-bearing errors to the renderer.
+    const code = error instanceof DebInstallError
+      ? error.reason === 'not-deb-install' ? 'wrong-launcher'
+        : error.reason === 'version-mismatch' ? 'not-installed'
+        : error.reason === 'package-manager' ? 'install-failed' : 'verification'
+      : updateErrorMessage(error)
+    return this.change({ phase: 'error', percent: null, message: code })
   }
 
-  check(): Promise<UpdateStatus> {
+  check(manual = false): Promise<UpdateStatus> {
+    if (!manual && this.state.message === 'not-installed') return Promise.resolve(this.snapshot())
+    if (manual && this.state.message === 'not-installed' && this.attemptFile) {
+      clearInstallAttempt(this.attemptFile)
+    }
     if (this.state.phase === 'disabled' || this.state.phase === 'downloading' ||
         this.state.phase === 'ready' || this.state.phase === 'installing') return Promise.resolve(this.snapshot())
     if (this.checkJob) return this.checkJob
@@ -124,6 +152,7 @@ export class UpdateManager {
     if (this.downloadJob) return this.downloadJob
     if (this.state.phase !== 'available') return Promise.reject(new Error('No update is ready for download'))
     this.lastProgress = -1
+    this.downloadedDeb = null
     this.change({ phase: 'downloading', percent: 0, message: null })
     this.downloadJob = (async () => {
       try { await this.updater.downloadUpdate() }
@@ -133,14 +162,45 @@ export class UpdateManager {
     return this.downloadJob
   }
 
-  install(): UpdateStatus {
-    if (this.state.phase !== 'ready') throw new Error('A verified update has not finished downloading')
-    this.change({ phase: 'installing' })
-    // Return the IPC reply before the installer closes the application.
-    setTimeout(() => {
-      try { this.updater.quitAndInstall(false, true) }
-      catch (error) { this.fail(error) }
-    }, 150)
-    return this.snapshot()
+  install(): Promise<UpdateStatus> {
+    if (this.installJob) return this.installJob
+    if (this.state.phase !== 'ready' || !this.state.availableVersion) {
+      return Promise.reject(new Error('A verified update has not finished downloading'))
+    }
+    const target = this.state.availableVersion
+    this.change({ phase: 'installing', message: null })
+    this.installJob = (async () => {
+      try {
+        if (this.runtime.platform === 'linux' && !process.env.APPIMAGE) {
+          // Linux DEB installation needs privilege elevation. Wait for dpkg's
+          // actual result: quitAndInstall can relaunch even after an install fails.
+          const deb = this.downloadedDeb
+          if (!deb || deb.version !== target) {
+            throw new DebInstallError('verification', 'No verified DEB download for this version')
+          }
+          await installVerifiedDeb({
+            file: deb.file, expectedVersion: target,
+            sha512: deb.sha512, executable: process.execPath
+          })
+          if (this.attemptFile) recordInstallAttempt(this.attemptFile, this.state.currentVersion, target)
+          // dpkg-query has confirmed the installed version before any restart.
+          setTimeout(() => {
+            try { app.relaunch(); app.quit() }
+            catch (error) { this.fail(error) }
+          }, 200)
+        } else {
+          if (this.attemptFile) recordInstallAttempt(this.attemptFile, this.state.currentVersion, target)
+          // NSIS and AppImage retain the tested electron-updater path.
+          setTimeout(() => {
+            try { this.updater.quitAndInstall(false, true) }
+            catch (error) { this.fail(error) }
+          }, 150)
+        }
+      } catch (error) {
+        this.fail(error)
+      }
+      return this.snapshot()
+    })().finally(() => { this.installJob = null })
+    return this.installJob
   }
 }

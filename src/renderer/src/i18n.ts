@@ -87,7 +87,10 @@ const en = {
   updateActionFailed: 'Update action failed. Try again.',
   updateErrorAuth: 'GitHub Releases are inaccessible. For a private repository, authenticate with gh auth login or GH_TOKEN.',
   updateErrorNetwork: 'Could not reach GitHub. Check your network connection and retry.',
-  updateErrorVerification: 'The downloaded installer failed verification and was not installed.'
+  updateErrorVerification: 'The downloaded installer failed verification and was not installed.',
+  updateErrorInstallFailed: 'Linux could not install the package. Spindle has not restarted. Check package-manager errors or install the DEB manually.',
+  updateErrorWrongLauncher: 'This Spindle executable is not owned by the installed Debian package. Launch Spindle from the system application menu, or update the AppImage you are actually using.',
+  updateErrorNotInstalled: 'The previous update did not take effect. Check the installed Spindle version and which executable your launcher opens.'
 } as const
 const hu: Record<keyof typeof en, string> = {
   productDescription: 'A fejlesztői ökoszisztémád egy helyen.',
@@ -175,7 +178,10 @@ const hu: Record<keyof typeof en, string> = {
   updateActionFailed: 'A frissítés sikertelen. Próbáld újra.',
   updateErrorAuth: 'A GitHub-kiadások nem érhetők el. Privát tárolóhoz jelentkezz be a gh auth login paranccsal vagy adj meg GH_TOKEN-t.',
   updateErrorNetwork: 'Nem sikerült kapcsolódni a GitHubhoz. Ellenőrizd a hálózatot, majd próbáld újra.',
-  updateErrorVerification: 'A letöltött telepítő ellenőrzése sikertelen, ezért nem lett telepítve.'
+  updateErrorVerification: 'A letöltött telepítő ellenőrzése sikertelen, ezért nem lett telepítve.',
+  updateErrorInstallFailed: 'A Linux csomagtelepítése sikertelen. A Spindle nem indult újra. Ellenőrizd a csomagkezelő hibáját, vagy telepítsd kézzel a DEB fájlt.',
+  updateErrorWrongLauncher: 'A futó Spindle nem a telepített Debian-csomaghoz tartozik. Indítsd a rendszer alkalmazásmenüjéből, vagy frissítsd a ténylegesen használt AppImage fájlt.',
+  updateErrorNotInstalled: 'Az előző frissítés nem lépett érvénybe. Ellenőrizd a telepített verziót és az indító által megnyitott fájlt.'
 }
 const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('spindle.language') : null
 void i18n.use(initReactI18next).init({
