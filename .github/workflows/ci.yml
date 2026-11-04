@@ -26,15 +26,7 @@ jobs:
         with:
           node-version: '22'
       - name: Install
-        run: pnpm install --no-frozen-lockfile
-      - name: Export lockfile for bootstrap (Linux only)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          echo '__SPINDLE_UPDATER_LOCK_BEGIN__'
-          base64 -w0 pnpm-lock.yaml
-          echo
-          echo '__SPINDLE_UPDATER_LOCK_END__'
+        run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
