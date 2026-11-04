@@ -45,11 +45,14 @@ function mockGithub(options = {}) {
       })
     }
     if (args[0] === 'api') {
-      assert.deepEqual(args, ['api', 'repos/' + repository + '/releases/123'])
-      return JSON.stringify({
-        tag_name: tag, draft: release.draft, prerelease: release.prerelease,
-        assets: [...release.assets.values()]
-      })
+      const item = { tag_name: tag, draft: release.draft,
+        prerelease: release.prerelease, assets: [...release.assets.values()] }
+      if (args[1] === 'repos/' + repository + '/releases/123') {
+        if (options.byIdUnavailable) throw new Error('HTTP 404')
+        return JSON.stringify(item)
+      }
+      assert.deepEqual(args, ['api', 'repos/' + repository + '/releases?per_page=100'])
+      return JSON.stringify(release.exists ? [item] : [])
     }
     assert.equal(args[0], 'release')
     const operation = args[1]
@@ -136,6 +139,13 @@ try {
   await publish(recoveredRead)
   assert.equal(creates(recoveredRead).length, 1,
     'transient release lookup must be retried instead of creating duplicate')
+
+  const draftCollectionFallback = mockGithub({ byIdUnavailable: true })
+  await publish(draftCollectionFallback)
+  assert.equal(draftCollectionFallback.release.draft, false)
+  assert.ok(draftCollectionFallback.calls.some((args) =>
+    args[0] === 'api' && args[1].endsWith('/releases?per_page=100')),
+    'a draft accessible through the collection must still publish')
 
   const wrongDigest = mockGithub({ exists: true })
   for (const name of names) wrongDigest.release.assets.set(name, localAsset(name))
