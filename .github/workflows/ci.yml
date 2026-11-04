@@ -171,3 +171,39 @@ jobs:
       - name: Verify real silent NSIS install and upgrade
         shell: pwsh
         run: ./scripts/test-nsis-upgrade.ps1
+
+  appimage-upgrade:
+    name: Native AppImage replacement / ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build the older unpublished AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.9000
+          pnpm build
+          pnpm exec electron-builder --linux AppImage --x64 --publish never
+          mkdir -p "$RUNNER_TEMP/spindle-appimage-integration"
+          cp release/Spindle-0.1.0-rc.9000-linux-x64.AppImage "$RUNNER_TEMP/spindle-appimage-integration/"
+      - name: Build the newer unpublished AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.9001
+          pnpm build
+          pnpm exec electron-builder --linux AppImage --x64 --publish never
+          test -f release/Spindle-0.1.0-rc.9001-linux-x64.AppImage
+      - name: Verify real AppImage runtime and portable version replacement
+        shell: bash
+        env:
+          SPINDLE_NATIVE_APPIMAGE_UPGRADE: '1'
+        run: bash ./scripts/test-appimage-upgrade.sh
