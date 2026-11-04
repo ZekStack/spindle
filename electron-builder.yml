@@ -1,0 +1,20 @@
+appId: dev.zekstack.spindle
+productName: Spindle
+asar: true
+directories:
+  output: release
+files:
+  - out/**/*
+  - package.json
+linux:
+  category: Development
+  target:
+    - AppImage
+    - deb
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+publish: null
