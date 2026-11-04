@@ -94,6 +94,12 @@ release pipeline that leaves users on the wrong version.
 - [ ] **M0.4 — Other platform upgrades.** Test AppImage → AppImage on Linux
       and NSIS → NSIS on Windows with the same newer-version, progress,
       cancel/error, restart, and package-identity expectations.
+      Engineering work: [x] Windows CI builds two unpublished NSIS RC
+      installers, silently installs each sequentially on the same runner,
+      verifies the packaged updater identity/version via Electron preload/IPC,
+      and checks the installed payload changes. **Real electron-updater
+      download/restart and manual Windows consent/cancel QA remain open;
+      AppImage upgrades are still unvalidated.**
 - [ ] **M0.5 — Channel/diagnostic QA.** Stable installations must ignore RCs;
       RC installations may advance to newer RCs and stable builds. Keep
       credentials out of logs and renderer errors; provide useful diagnostic
