@@ -84,3 +84,38 @@ Spindle uses the MIT License. Open an issue or PR with a focused change and
 tests. Keep organization identifiers and release workflows configurable,
 avoid embedding secrets, and require an explicit confirmation for future
 remote mutations.
+
+## Downloadable releases
+
+Releases are created by pushing a valid semantic version tag to GitHub.
+Both stable tags (`v0.1.0`) and release candidates (`v0.1.0-rc.1`)
+are supported. The suffix is embedded into the packaged app's version.
+RC releases are GitHub prereleases and **do not supersede latest stable**.
+
+The `Release` GitHub Actions workflow builds three **x64** packages on
+native GitHub-hosted runners and publishes them only after all builds pass:
+
+| OS | Download |
+| --- | --- |
+| Debian / Ubuntu / Linux Mint | `Spindle-<version>-linux-x64.deb` |
+| Linux (portable) | `Spindle-<version>-linux-x64.AppImage` |
+| Windows | `Spindle-Setup-<version>-windows-x64.exe` |
+
+Each release includes a `SHA256SUMS.txt` with checksums for all three
+packages. GitHub Actions uses `contents: write` only in the publishing
+job. Assets can be replaced on a rerun without moving the tag.
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.1.0-rc.1 -m 'Spindle v0.1.0-rc.1'
+git push origin v0.1.0-rc.1
+```
+
+After the workflows succeed, download the packages from
+[GitHub Releases](https://github.com/ZekStack/spindle/releases).
+AppImage users should run `chmod +x Spindle-*.AppImage` before launch.
+These early builds are **not code signed**. Windows SmartScreen may warn,
+and the installers still require desktop QA prior to public promotion.
+
+See [release procedure](docs/RELEASING.md) for validation and RC rules.

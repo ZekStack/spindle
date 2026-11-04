@@ -1,5 +1,6 @@
 appId: dev.zekstack.spindle
 productName: Spindle
+executableName: spindle
 asar: true
 directories:
   output: release
@@ -7,14 +8,21 @@ files:
   - out/**/*
   - package.json
 linux:
+  icon: build/icons
   category: Development
+  synopsis: GitHub repository and release manager
+  description: Manage GitHub repositories, releases and workflows across organizations.
+  artifactName: 'Spindle-${version}-linux-${arch}.${ext}'
   target:
     - AppImage
     - deb
 win:
+  icon: build/icon.ico
+  artifactName: 'Spindle-Setup-${version}-windows-${arch}.${ext}'
   target:
     - nsis
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  artifactName: 'Spindle-Setup-${version}-windows-${arch}.${ext}'
 publish: null

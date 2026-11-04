@@ -16,7 +16,7 @@ The app runs on Windows and Linux. No organization, username, repository or work
 - [x] Unit tests, Windows/Linux CI jobs, packaging configuration
 - [x] Generate and commit `pnpm-lock.yaml`; use frozen CI installation
 - [ ] Verify Electron packaged GUI on both Windows and Linux (Linux preload/IPC smoke in CI)
-- [ ] Replace packaging placeholder icon with platform icons
+- [x] Generate orange/charcoal Linux PNG and Windows ICO icons for packaging
 
 ## R2 — GitHub identity and organization UX
 
@@ -60,7 +60,8 @@ The app runs on Windows and Linux. No organization, username, repository or work
 
 - [ ] Public documentation, onboarding, contribution guidelines
 - [ ] Installer icons, signing strategy, Linux AppImage/deb and Windows NSIS
-- [ ] CI release pipeline with build provenance/artifact checksums
+- [x] Tag-triggered Linux/Windows release workflow with SHA-256 checksums and RC prereleases
+- [ ] Add signed builds and stronger release provenance/attestations
 - [ ] Accessibility and keyboard-navigation QA
 - [ ] Security audit and end-to-end packaged-app smoke tests
 
