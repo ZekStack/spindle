@@ -4,7 +4,12 @@ import {
 } from './update-policy'
 
 /** Called before transitioning to error so the last failed phase survives. */
-export function failedUpdateOperation(phase: UpdatePhase): UpdateOperation {
+export function failedUpdateOperation(
+  phase: UpdatePhase, previous: UpdateOperation | null = null
+): UpdateOperation {
+  // electron-updater can emit 'error' and reject the promise for one failure.
+  // The second notification must not overwrite the original operation.
+  if (phase === 'error' && previous !== null) return previous
   if (phase === 'installing') return 'install'
   if (phase === 'downloading' || phase === 'ready') return 'download'
   return 'check'
