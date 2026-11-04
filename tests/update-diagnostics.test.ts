@@ -24,6 +24,8 @@ test('failed operation is derived before changing updater phase', () => {
   for (const [phase, expected] of cases) {
     assert.equal(failedUpdateOperation(phase), expected)
   }
+  assert.equal(failedUpdateOperation('error', 'download'), 'download')
+  assert.equal(failedUpdateOperation('error', 'install'), 'install')
 })
 
 test('diagnostics expose meaningful safe fields, including package and phase', () => {
