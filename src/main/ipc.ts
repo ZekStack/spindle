@@ -1,4 +1,4 @@
-import { ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { clipboard, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { GitHubClient } from './github'
@@ -55,4 +55,5 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:update:check', () => updates.check(true))
   handle('spindle:update:download', () => updates.download())
   handle('spindle:update:install', () => updates.install())
+  handle('spindle:update:copy-diagnostics', () => { clipboard.writeText(updates.diagnosticReport()) })
 }

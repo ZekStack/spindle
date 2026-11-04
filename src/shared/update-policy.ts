@@ -43,12 +43,17 @@ export type UpdatePhase =
   | 'disabled' | 'idle' | 'checking' | 'up-to-date'
   | 'available' | 'downloading' | 'ready' | 'installing' | 'error'
 
+export type UpdateOperation = 'check' | 'download' | 'install'
+export type UpdateInstallType = 'deb' | 'appimage' | 'nsis' | 'unknown'
+
 export interface UpdateStatus {
   phase: UpdatePhase
   currentVersion: string
   availableVersion: string | null
   percent: number | null
   message: UpdateErrorCode | null
+  installType: UpdateInstallType
+  failureStage: UpdateOperation | null
 }
 
 /** Don't leak token-bearing updater URLs or raw HTTP headers to the renderer. */

@@ -89,6 +89,13 @@ release pipeline that leaves users on the wrong version.
       RC installations may advance to newer RCs and stable builds. Keep
       credentials out of logs and renderer errors; provide useful diagnostic
       context and a manual download fallback.
+      Engineering work: [x] release-version policy tests; [x] allowlisted
+      update diagnostic report containing installer type, channel, last
+      failure phase and category; [x] trusted IPC clipboard action; [x]
+      existing manual GitHub Releases fallback; [x] disable upstream updater
+      logging to prevent credential-bearing requests entering raw logs.
+      **Packaged channel/error QA
+      remains open** for Linux and Windows.
 
 **Exit gate:** the *packaged* application completes a two-version upgrade on
 each supported installer type; failed installation never reports success;
