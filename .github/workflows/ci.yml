@@ -136,3 +136,38 @@ jobs:
           installed="$(dpkg-query --show --showformat='${Version}' spindle)"
           test "$installed" = '0.1.0~rc.9001'
           xvfb-run -a timeout 45s /opt/Spindle/spindle --no-sandbox
+
+  nsis-upgrade:
+    name: Native NSIS upgrade / windows-latest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build an older RC NSIS installer (not published)
+        shell: pwsh
+        run: |
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.9000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec electron-builder --win nsis --x64 --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build a newer RC NSIS installer (not published)
+        shell: pwsh
+        run: |
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.9001
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec electron-builder --win nsis --x64 --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify real silent NSIS install and upgrade
+        shell: pwsh
+        run: ./scripts/test-nsis-upgrade.ps1
