@@ -42,7 +42,7 @@ jobs:
           fi
 
           git ls-remote --refs --tags origin |
-            awk '{ sub(/^refs\\/tags\\//, "", $2); print $2 }' > "$RUNNER_TEMP/spindle-existing-tags.txt"
+            awk '{ print substr($2, 11) }' > "$RUNNER_TEMP/spindle-existing-tags.txt"
           node scripts/validate-next-rc.mjs "$RELEASE_TAG" "$RUNNER_TEMP/spindle-existing-tags.txt"
 
           tagged_sha="$(git rev-parse HEAD)"
