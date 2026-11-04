@@ -79,8 +79,20 @@ async function releaseDetails(gh, repository, tag) {
       !/^\d+$/.test(uri.pathname.slice(expected.length))) {
     throw new Error('Unexpected GitHub release API URL')
   }
-  const raw = await gh(['api', uri.pathname.slice(1)])
-  const data = JSON.parse(raw)
+  let data
+  try {
+    data = JSON.parse(await gh(['api', uri.pathname.slice(1)]))
+  } catch (error) {
+    if (!isNotFound(error)) throw error
+    // Some API access paths expose drafts through the releases collection
+    // but not through the direct release-ID lookup. Only a writer sees drafts.
+    const list = JSON.parse(await gh([
+      'api', 'repos/' + repository + '/releases?per_page=100'
+    ]))
+    if (!Array.isArray(list)) throw new Error('Invalid release collection response')
+    data = list.find((item) => item.tag_name === tag)
+    if (!data) throw new Error('Release is not accessible with current permissions')
+  }
   if (!Array.isArray(data.assets) ||
       typeof data.draft !== 'boolean' || typeof data.prerelease !== 'boolean' ||
       data.tag_name !== tag) {
