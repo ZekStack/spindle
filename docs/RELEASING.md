@@ -131,9 +131,10 @@ git push origin v0.1.0-rc.6
 
 Publication now stages a **draft** release before uploading assets one by
 one. It retries transient GitHub HTTP 429/5xx and connection failures, checks
-remote asset names and sizes to resume after partial success, and makes the
-release public **only** when every required installer, update manifest, and
-checksum file is present. It excludes electron-builder debug metadata from
+remote asset names, sizes, and SHA-256 digests to resume after partial
+success. An existing **published** release is never overwritten when asset
+bytes differ. It makes the release public **only** when every required
+installer, update manifest, and checksum file has the expected digest. It excludes electron-builder debug metadata from
 public downloads.
 
 A failed publication leaves the draft with any successfully uploaded assets.
@@ -168,3 +169,25 @@ implementations. Debian detection uses electron-builder's packaged
 `resources/package-type` marker; an unknown Linux package type has
 auto-updating disabled instead of guessing. This works for stable and
 `-rc.N` releases without depending on custom GitHub channel names.
+
+## Publication integrity and next RC validation
+
+The release publisher reads GitHub's REST release asset metadata, which
+provides immutable upload-time SHA-256 digests. Reruns compare every expected
+asset by filename, size, and digest; matching published releases are no-ops.
+A digest mismatch on a **draft** can be repaired with a resumable re-upload.
+A mismatch on a **published** release stops with an error rather than
+silently replacing a published installer. Permission failures (403) are not
+mistaken for a missing release (404).
+
+PR CI validates the GitHub Actions workflow definitions with actionlint so
+release-only workflow syntax problems can be detected before a tag push.
+
+The `v0.1.0-rc.6` workflow failed before any build or publication jobs ran;
+GitHub's Jobs API exposes only skipped downstream jobs, not a failing
+validation step. The exact cause is not established by the available logs.
+That tag is already pushed, so do not move or reuse it. After merging the
+next reliability PR, choose **a new RC number** (for example `rc.7`) from
+the latest `main`. Confirm a real release has appeared with complete
+packages, both updater manifests, SHA256SUMS, and successful GitHub Actions
+jobs before marking roadmap item M0.1 done.
