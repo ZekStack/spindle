@@ -19,6 +19,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate GitHub Actions workflows
+        if: runner.os == 'Linux'
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
       - uses: pnpm/action-setup@v4
         with:
           version: 10.20.0

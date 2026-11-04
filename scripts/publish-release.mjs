@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { parseReleaseTag } from './prepare-release.mjs'
@@ -10,7 +12,6 @@ const execFileAsync = promisify(execFile)
 const wait = (ms) => new Promise((done) => setTimeout(done, ms))
 const RETRIES = 5
 
-/** gh is used only in CI; the GITHUB_TOKEN stays in the job environment. */
 async function github(args) {
   const { stdout } = await execFileAsync('gh', args, {
     timeout: 240_000,
@@ -25,102 +26,177 @@ function transient(error) {
   return /\b(?:429|500|502|503|504)\b|ECONNRESET|ETIMEDOUT|timeout|temporary|rate limit/i.test(message)
 }
 
+function isNotFound(error) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /\bHTTP\s+404\b|\bNot Found\s+\(HTTP\s+404\)|\bno release found for\b|\brelease not found\b/i.test(message)
+}
+
 async function retry(label, task, sleep) {
   for (let attempt = 1; attempt <= RETRIES; attempt++) {
     try { return await task() }
     catch (error) {
       if (!transient(error) || attempt === RETRIES) throw error
-      const delay = 2 ** attempt * 1000
-      console.warn(`${label} hit a temporary GitHub failure (attempt ${attempt}/${RETRIES}); retrying`)
-      await sleep(delay)
+      console.warn(label + ': transient GitHub error, attempt ' + attempt + '/' + RETRIES)
+      await sleep(2 ** attempt * 1000)
     }
   }
-  throw new Error(`${label} exceeded retries`)
+  throw new Error(label + ' exceeded retries')
 }
 
-async function localAssets(dir, version) {
-  const names = await readdir(dir)
-  const mandatory = [
-    ...expectedFiles('all', version),
-    'latest.yml',
-    'latest-linux.yml',
-    'SHA256SUMS.txt'
-  ]
+async function sha256(path) {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(path)) hash.update(chunk)
+  return 'sha256:' + hash.digest('hex')
+}
+
+async function localAssets(directory, version) {
+  const names = await readdir(directory)
+  const required = [...expectedFiles('all', version),
+    'latest.yml', 'latest-linux.yml', 'SHA256SUMS.txt']
   const optional = names.filter((name) => name.endsWith('.blockmap')).sort()
-  const selected = [...mandatory, ...optional]
+  const selected = [...required, ...optional]
   const entries = []
   for (const name of selected) {
-    if (!names.includes(name)) throw new Error(`Missing release asset ${name}`)
-    const file = join(dir, name)
+    if (!names.includes(name)) throw new Error('Missing release asset: ' + name)
+    const file = join(directory, name)
     const info = await stat(file)
-    if (!info.isFile() || info.size === 0) throw new Error(`Invalid release asset ${name}`)
-    entries.push({ name, file, size: info.size })
+    if (!info.isFile() || info.size === 0) throw new Error('Invalid release asset: ' + name)
+    entries.push({ name, file, size: info.size, digest: await sha256(file) })
   }
   return entries
 }
 
-async function releaseDetails(gh, tag) {
-  const raw = await gh(['release', 'view', tag, '--json', 'assets,isDraft,isPrerelease'])
-  const detail = JSON.parse(raw)
-  if (!Array.isArray(detail.assets)) throw new Error('GitHub returned invalid release asset data')
-  return detail
+async function releaseDetails(gh, repository, tag) {
+  // The REST /releases/tags/{tag} endpoint is for *published* releases.
+  // gh release view can resolve drafts with write access, giving the
+  // numeric release ID. Fetch that ID through REST for SHA-256 digests.
+  const view = JSON.parse(await gh(['release', 'view', tag, '--json', 'apiUrl']))
+  const uri = new URL(view.apiUrl)
+  const expected = '/repos/' + repository + '/releases/'
+  if (uri.protocol !== 'https:' || uri.hostname !== 'api.github.com' ||
+      uri.username || uri.password || uri.port || uri.search || uri.hash ||
+      !uri.pathname.toLowerCase().startsWith(expected.toLowerCase()) ||
+      !/^\d+$/.test(uri.pathname.slice(expected.length))) {
+    throw new Error('Unexpected GitHub release API URL')
+  }
+  let data
+  try {
+    data = JSON.parse(await gh(['api', uri.pathname.slice(1)]))
+  } catch (error) {
+    if (!isNotFound(error)) throw error
+    // Some API access paths expose drafts through the releases collection
+    // but not through the direct release-ID lookup. Only a writer sees drafts.
+    const list = JSON.parse(await gh([
+      'api', 'repos/' + repository + '/releases?per_page=100'
+    ]))
+    if (!Array.isArray(list)) throw new Error('Invalid release collection response')
+    data = list.find((item) => item.tag_name === tag)
+    if (!data) throw new Error('Release is not accessible with current permissions')
+  }
+  if (!Array.isArray(data.assets) ||
+      typeof data.draft !== 'boolean' || typeof data.prerelease !== 'boolean' ||
+      data.tag_name !== tag) {
+    throw new Error('GitHub returned incomplete or mismatched release details')
+  }
+  return data
+}
+
+async function optionalRelease(gh, repository, tag, sleep) {
+  try {
+    return await retry('Reading GitHub Release',
+      () => releaseDetails(gh, repository, tag), sleep)
+  } catch (error) {
+    if (isNotFound(error)) return null
+    // A 401/403, transient outage, or malformed response is not a missing
+    // release. Never attempt to create a duplicate in those situations.
+    throw error
+  }
+}
+
+function matches(remote, local) {
+  return remote && remote.name === local.name &&
+    remote.state === 'uploaded' &&
+    remote.size === local.size && remote.digest === local.digest
+}
+
+function verifyExactAssets(details, assets) {
+  const expected = new Map(assets.map((item) => [item.name, item]))
+  for (const asset of assets) {
+    if (!matches(details.assets.find((item) => item.name === asset.name), asset)) {
+      throw new Error('temporary missing or incorrect release asset: ' + asset.name)
+    }
+  }
+  for (const remote of details.assets) {
+    if (!expected.has(remote.name)) {
+      throw new Error('Unexpected release asset: ' + remote.name)
+    }
+  }
 }
 
 /**
- * Publish as a draft and upload one asset at a time. A 5xx after GitHub
- * accepts an upload is recoverable: inspect the remote asset before retrying.
+ * Draft-first, resumable publication. Digest verification prevents a same-size
+ * but different binary from being incorrectly accepted after an API 500.
+ * Published releases are never silently modified on rerun.
  */
 export async function publishRelease(
-  { tag, prerelease, directory },
+  { tag, prerelease, directory, repository = process.env.GH_REPO },
   { gh = github, sleep = wait } = {}
 ) {
   const { version, prerelease: tagIsPrerelease } = parseReleaseTag(tag)
   if (prerelease !== tagIsPrerelease) throw new Error('Release channel does not match the tag')
+  if (typeof repository !== 'string' || !/^[\w.-]+\/[\w.-]+$/.test(repository)) {
+    throw new Error('GH_REPO must identify exactly one owner/repository')
+  }
   const assets = await localAssets(resolve(directory), version)
+  let details = await optionalRelease(gh, repository, tag, sleep)
 
-  let releaseExists = false
-  try {
-    await releaseDetails(gh, tag)
-    releaseExists = true
-  } catch {
-    // A missing release is normal before first publication.
+  if (details && !details.draft) {
+    // Reruns are safe only when all existing published bytes are identical.
+    verifyExactAssets(details, assets)
+    if (details.prerelease !== prerelease) {
+      throw new Error('Published release has a different release channel')
+    }
+    console.log('Already published and verified: ' + tag)
+    return
   }
 
-  if (!releaseExists) {
+  if (!details) {
     for (let attempt = 1; attempt <= RETRIES; attempt++) {
       try {
         await gh(['release', 'create', tag, '--verify-tag', '--draft',
-          '--title', `Spindle ${tag}`, '--generate-notes'])
+          '--title', 'Spindle ' + tag, '--generate-notes'])
       } catch (error) {
-        // GitHub may create a draft, then return HTTP 500.
-        try { await releaseDetails(gh, tag); releaseExists = true; break }
-        catch { /* No accessible release yet. */ }
+        // A failed create response may follow a successfully created draft.
+        details = await optionalRelease(gh, repository, tag, sleep)
+        if (details) break
         if (!transient(error) || attempt === RETRIES) throw error
-        console.warn(`Creating release failed transiently (attempt ${attempt}/${RETRIES})`)
         await sleep(2 ** attempt * 1000)
         continue
       }
-      releaseExists = true
-      break
+      details = await optionalRelease(gh, repository, tag, sleep)
+      if (details) break
     }
-    if (!releaseExists) throw new Error('Could not create the draft release')
+    if (!details || !details.draft) {
+      throw new Error('GitHub did not create an accessible draft release')
+    }
   }
 
   for (const asset of assets) {
     for (let attempt = 1; attempt <= RETRIES; attempt++) {
-      const remote = await retry('Reading release assets',
-        () => releaseDetails(gh, tag), sleep)
-      const existing = remote.assets.find((item) => item.name === asset.name)
-      if (existing && existing.size === asset.size) {
-        console.log(`Already uploaded: ${asset.name}`)
+      details = await retry('Reading draft assets',
+        () => releaseDetails(gh, repository, tag), sleep)
+      if (!details.draft) throw new Error('Release became public during upload')
+      const remote = details.assets.find((item) => item.name === asset.name)
+      if (matches(remote, asset)) {
+        console.log('Already uploaded and verified: ' + asset.name)
         break
       }
       try {
+        // A mismatched draft asset is replaced, but published assets never are.
         await gh(['release', 'upload', tag, asset.file, '--clobber'])
       } catch (error) {
-        // A retry first checks whether the 5xx happened after upload succeeded.
         if (!transient(error) || attempt === RETRIES) throw error
-        console.warn(`Uploading ${asset.name} failed transiently (attempt ${attempt}/${RETRIES})`)
+        console.warn('Upload retry needed for ' + asset.name + ', attempt ' + attempt)
         await sleep(2 ** attempt * 1000)
         continue
       }
@@ -128,27 +204,24 @@ export async function publishRelease(
     }
   }
 
-  // Verify every asset by name and size before making any new release public.
-  const verify = async () => {
-    const result = await releaseDetails(gh, tag)
-    for (const asset of assets) {
-      const remote = result.assets.find((item) => item.name === asset.name)
-      if (!remote || remote.size !== asset.size) {
-        throw new Error(`Published release asset missing or mismatched: ${asset.name}`)
-      }
-    }
-  }
-  await retry('Verifying uploaded release assets', verify, sleep)
+  await retry('Verifying release assets', async () => {
+    const result = await releaseDetails(gh, repository, tag)
+    if (!result.draft) throw new Error('Release became public before final verification')
+    verifyExactAssets(result, assets)
+  }, sleep)
 
   const editArgs = ['release', 'edit', tag, '--draft=false',
-    `--prerelease=${prerelease}`]
+    '--prerelease=' + prerelease]
   if (prerelease) editArgs.push('--latest=false')
   await retry('Publishing release', () => gh(editArgs), sleep)
-  const final = await retry('Checking published release', () => releaseDetails(gh, tag), sleep)
-  if (final.isDraft !== false || final.isPrerelease !== prerelease) {
+
+  const published = await retry('Checking published release',
+    () => releaseDetails(gh, repository, tag), sleep)
+  if (published.draft || published.prerelease !== prerelease) {
     throw new Error('Release publication state is inconsistent')
   }
-  console.log(`Published ${tag} with ${assets.length} verified assets`)
+  verifyExactAssets(published, assets)
+  console.log('Published ' + tag + ' with ' + assets.length + ' SHA-256 verified assets')
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -159,8 +232,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else {
     publishRelease({ tag, prerelease: channel === 'true', directory })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error)
-        console.error('Release publishing failed:', message)
+        console.error('Release publishing failed:',
+          error instanceof Error ? error.message : String(error))
         process.exitCode = 1
       })
   }

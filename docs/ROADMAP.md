@@ -63,6 +63,11 @@ release pipeline that leaves users on the wrong version.
       Linux/Windows builders pass, checksums and both update manifests are
       uploaded, and the GitHub Release becomes visible. Test transient upload
       failures/resume without moving existing tags.
+      Engineering work completed: [x] SHA-256 digest matching of all release
+      assets instead of trusting size alone; [x] explicit 404-versus-403/5xx
+      release lookup; [x] fail-safe behavior for already-published assets;
+      [x] GitHub Actions workflow lint in CI. **Runtime gate remains open**
+      until a new tag completes real GitHub Release publication.
 - [ ] **M0.2 — Debian format selection.** On an installed Mint/Ubuntu DEB,
       inspect the running package type, confirm the network download is
       `.deb` (never `.AppImage`), and confirm it matches the release SHA-512.
@@ -253,7 +258,15 @@ passing release/update validation.
 6. **Do not merge on green CI alone** when a stage requires a real GitHub or
    OS-level action; record a short manual QA matrix with results.
 
-**Next action:** close **M0**, starting with the failed latest tag-push run
-and an actual Debian-to-Debian update between two *newer* releases. Only
-then begin M1 and M2. Feature development should not hide an unverified
-installation path.
+**Latest validation:** `v0.1.0-rc.7` successfully validated its tag,
+built Linux and Windows installers, and published the GitHub Release with
+both update manifests and checksums on November 4, 2026. The earlier
+`v0.1.0-rc.6` run failed without exposing a validation job in GitHub's
+Jobs API; its precise cause remains unconfirmed. Publisher digest verification
+and workflow lint have been implemented as additional reliability gates,
+but must pass CI before M0.1 is closed.
+
+**Next action after M0.1:** validate the **installed** Debian-to-Debian
+updater on Linux Mint (M0.2–M0.3), using two successive releases that
+actually contain the strict DEB selector. Then validate AppImage and NSIS
+upgrades. Do not begin M1 before the M0 installation gates pass.
