@@ -110,6 +110,25 @@ two-release manual Mint check, including cancelled authorization and
 package-manager failures. Do not treat the installed-package smoke as an
 automatic update end-to-end test.
 
+## Two-version AppImage portable replacement integration (M0.4)
+
+The Linux CI workflow separately builds two unpublished AppImages,
+`0.1.0-rc.9000` and `0.1.0-rc.9001`, from the same checkout. It launches
+the older portable executable under Xvfb, checks the real AppImage runtime's
+`APPIMAGE` path and verifies that the Electron process reports the correct
+`appimage` updater type, version and preload/IPC state. It then replaces
+the same portable executable path with the newer artifact, confirms its
+SHA-256 changed, and performs the same packaged smoke checks against the new
+version. Neither AppImage requires root privileges.
+
+The GitHub-hosted runner uses the AppImage runtime's
+`APPIMAGE_EXTRACT_AND_RUN=1` fallback to avoid requiring FUSE. This still
+exercises the AppImage runtime and packaged application, **not** the real
+`electron-updater` download, SHA-512 verification, installation handoff or
+restart. Replacement happens only while the app is stopped. Both RC numbers
+are test fixtures, not published releases. Manual AppImage-to-AppImage
+updater QA remains mandatory before closing M0.4.
+
 ## Two-version Windows NSIS upgrade integration (M0.4)
 
 The Windows CI workflow builds two **unpublished** `0.1.0-rc.9000` and
