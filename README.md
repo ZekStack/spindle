@@ -193,3 +193,11 @@ sudo apt install ./Spindle-VERSION-linux-x64.deb
 
 The fix is shipped only in a **newer** release. A running older binary
 cannot acquire the changed installer implementation retroactively.
+
+### Release reliability
+
+Release tags must point to the current `main` commit. After merging new
+changes, update local `main` before creating the next version tag.
+GitHub Releases are published as drafts first, with individual resumable
+uploads and retries for transient GitHub API failures. A failed upload never
+makes an incomplete new release public. See [release procedure](docs/RELEASING.md).

@@ -21,6 +21,16 @@ jobs:
       prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require tag to point to the latest main commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          tagged_sha="$(git rev-parse HEAD)"
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ -z "$main_sha" || "$tagged_sha" != "$main_sha" ]]; then
+            echo "::error::Release tag points to $tagged_sha, but main is $main_sha. Merge changes, pull main and create a NEW version tag; do not force-move published tags."
+            exit 1
+          fi
       - name: Validate semantic version (stable or RC)
         id: tag
         shell: bash
@@ -95,7 +105,8 @@ jobs:
             release/*.deb
             release/*.AppImage
             release/*.exe
-            release/*.yml
+            release/latest.yml
+            release/latest-linux.yml
             release/*.blockmap
           if-no-files-found: error
           compression-level: 0
@@ -122,24 +133,10 @@ jobs:
           node scripts/verify-release-artifacts.mjs all "$RELEASE_VERSION" dist
           node scripts/verify-update-metadata.mjs all "$RELEASE_VERSION" dist
           (cd dist && shopt -s nullglob && sha256sum *.deb *.AppImage *.exe *.yml *.blockmap > SHA256SUMS.txt)
-      - name: Publish or update release assets
+      - name: Publish release with retries and verified assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
           IS_PRERELEASE: ${{ needs.validate.outputs.prerelease }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release exists; replacing its downloadable assets."
-            gh release upload "$RELEASE_TAG" dist/* --clobber
-            gh release edit "$RELEASE_TAG" --prerelease="$IS_PRERELEASE" --draft=false
-          elif [[ "$IS_PRERELEASE" == "true" ]]; then
-            gh release create "$RELEASE_TAG" dist/* \
-              --verify-tag --title "Spindle $RELEASE_TAG" \
-              --generate-notes --prerelease --latest=false
-          else
-            gh release create "$RELEASE_TAG" dist/* \
-              --verify-tag --title "Spindle $RELEASE_TAG" --generate-notes
-          fi
+        run: node scripts/publish-release.mjs "$RELEASE_TAG" "$IS_PRERELEASE" dist
