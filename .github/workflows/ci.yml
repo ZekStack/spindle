@@ -25,19 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # Bootstrap exception: pnpm-lock.yaml will be committed after the first
-      # dependency resolution; switch to --frozen-lockfile once generated.
       - name: Install
-        run: pnpm install --no-frozen-lockfile
-      # Temporary one-run bootstrap output; removed after committing the lockfile.
-      - name: Export generated pnpm lockfile
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: |
-          echo '__SPINDLE_LOCKFILE_BEGIN__'
-          base64 -w0 pnpm-lock.yaml
-          echo
-          echo '__SPINDLE_LOCKFILE_END__'
+        run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
@@ -46,3 +35,8 @@ jobs:
         run: pnpm build
       - name: Package smoke test
         run: pnpm exec electron-builder --dir --publish never
+      - name: Native preload and IPC smoke (Linux)
+        if: runner.os == 'Linux'
+        env:
+          SPINDLE_SMOKE_TEST: '1'
+        run: xvfb-run -a timeout 45s pnpm exec electron . --no-sandbox

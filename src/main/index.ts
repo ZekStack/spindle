@@ -39,9 +39,31 @@ function createWindow(): void {
     const allowedOrigin = process.env.ELECTRON_RENDERER_URL
     const valid = allowedOrigin
       ? new URL(url).origin === new URL(allowedOrigin).origin
-      : url.startsWith('file:') && fileURLToPath(url).endsWith(join('renderer', 'index.html'))
+      : url.startsWith('file:') && fileURLToPath(url) === join(ROOT, '../renderer/index.html')
     if (!valid) event.preventDefault()
   })
+  if (process.env.SPINDLE_SMOKE_TEST === '1') {
+    const watchdog = setTimeout(() => {
+      console.error('Spindle smoke test timed out')
+      app.exit(1)
+    }, 20_000)
+    mainWindow.webContents.once('did-finish-load', async () => {
+      try {
+        // Verifies that the sandboxed preload works and IPC reaches main.
+        const result = await mainWindow.webContents.executeJavaScript(
+          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return false; const state = await api.getWorkspace(); return Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories); })()"
+        )
+        if (!result) throw new Error('Preload or workspace bridge unavailable')
+        clearTimeout(watchdog)
+        console.log('Spindle Electron preload and IPC smoke test passed')
+        app.exit(0)
+      } catch (error) {
+        clearTimeout(watchdog)
+        console.error('Spindle smoke failed:', error)
+        app.exit(1)
+      }
+    })
+  }
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {

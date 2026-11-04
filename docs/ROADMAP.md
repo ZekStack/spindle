@@ -14,8 +14,8 @@ The app runs on Windows and Linux. No organization, username, repository or work
 - [x] Orange/charcoal design, light/dark themes, Hungarian/English
 - [x] TanStack Router/Query foundation
 - [x] Unit tests, Windows/Linux CI jobs, packaging configuration
-- [ ] Generate and commit `pnpm-lock.yaml`; use frozen CI installation
-- [ ] Verify Electron packaged GUI on both Windows and Linux
+- [x] Generate and commit `pnpm-lock.yaml`; use frozen CI installation
+- [ ] Verify Electron packaged GUI on both Windows and Linux (Linux preload/IPC smoke in CI)
 - [ ] Replace packaging placeholder icon with platform icons
 
 ## R2 — GitHub identity and organization UX

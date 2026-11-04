@@ -24,10 +24,14 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   }
   const handle = <Args extends unknown[], Return>(
     channel: string, fn: (...args: Args) => Promise<Return> | Return
-  ) => ipcMain.handle(channel, (event, ...args: Args) => {
-    allow(event)
-    return fn(...args)
-  })
+  ) => {
+    // Recreating a macOS window must not register duplicate global handlers.
+    ipcMain.removeHandler(channel)
+    ipcMain.handle(channel, (event, ...args: Args) => {
+      allow(event)
+      return fn(...args)
+    })
+  }
 
   handle('spindle:workspace:get', () => store.load())
   handle('spindle:workspace:add-org', async (login: string) => {

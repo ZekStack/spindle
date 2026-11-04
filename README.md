@@ -36,11 +36,9 @@ Other commands: `pnpm typecheck`, `pnpm test`, `pnpm build`,
 `pnpm pack:dir`, `pnpm pack:linux`, `pnpm pack:win`.
 Native packages should be built and tested on their respective target OS.
 
-**Bootstrap note:** this initial PR does not contain a generated
-`pnpm-lock.yaml` because the package registry is unavailable from the
-authoring environment. Generate it with `pnpm install` on a connected machine,
-commit it, then change CI installation to `pnpm install --frozen-lockfile`.
-Do not merge until the lockfile and full build are verified.
+The pnpm lockfile is committed and CI uses `pnpm install --frozen-lockfile`.
+The Windows and Linux builds are checked in CI, including a Linux Electron
+preload/IPC smoke test. Packaged installers still need human desktop QA.
 
 ## First-use workflow
 
