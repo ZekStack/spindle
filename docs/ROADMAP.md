@@ -85,6 +85,12 @@ release pipeline that leaves users on the wrong version.
       `dpkg-query` version, restart into the newly installed binary. Cancel
       authorization and force an install error: no false success, no restart,
       and no infinite repeated update offer.
+      Engineering work: [x] automated Debian upgrade integration builds two
+      unpublished RC packages from the same commit, installs the older
+      package, exercises `installVerifiedDeb` against the newer package with
+      its real SHA-512/package metadata, simulates cancelled elevation, and
+      smoke-tests the installed executable before and after. **Real user
+      updater download, pkexec prompt, relaunch, and Linux Mint QA remain open.**
 - [ ] **M0.4 — Other platform upgrades.** Test AppImage → AppImage on Linux
       and NSIS → NSIS on Windows with the same newer-version, progress,
       cancel/error, restart, and package-identity expectations.

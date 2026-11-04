@@ -41,8 +41,11 @@ The pnpm lockfile is committed and CI uses `pnpm install --frozen-lockfile`.
 The Windows and Linux builds are checked in CI, including a Linux Electron
 preload/IPC smoke test. Linux CI also installs the generated DEB on an
 ephemeral Ubuntu runner and verifies package ownership, version and updater
-identity through the packaged application. Two-version automatic upgrade
-testing on Linux Mint, AppImage and Windows still requires human desktop QA.
+identity through the packaged application. A separate Ubuntu integration job
+also builds two unpublished RC packages and exercises the verified Debian
+installer against real dpkg state, including simulated authorization denial.
+Two-version automatic update testing on Linux Mint, AppImage and Windows
+still requires human desktop QA.
 
 ## First-use workflow
 
