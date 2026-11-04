@@ -156,7 +156,7 @@ export class UpdateManager {
         : error.reason === 'package-manager' ? 'install-failed' : 'verification'
       : updateErrorMessage(error)
     return this.change({ phase: 'error', percent: null, message: code,
-      failureStage: failedUpdateOperation(this.state.phase) })
+      failureStage: failedUpdateOperation(this.state.phase, this.state.failureStage) })
   }
 
   check(manual = false): Promise<UpdateStatus> {
