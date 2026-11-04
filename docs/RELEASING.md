@@ -125,6 +125,25 @@ version after restart. Cancel elevation and verify the old app stays open,
 showing a failure. Use two real installed DEB releases, not an unpacked
 Electron build. The new preflight must be verified on a future tagged build.
 
+## Update diagnostics for QA (M0.5)
+
+Open **Spindle updates** and choose **Copy diagnostics**. The clipboard
+report includes only a fixed set of fields: operating system, installer type,
+release channel, running/available versions, updater phase, failed operation,
+error category, and timestamp of the last completed check. It excludes raw
+exception messages, local executable paths, release URLs, authorization
+headers and tokens. Attach that report and the **observed** installer version
+to any updater regression report. Keep personal logs or authentication tokens
+out of public issues.
+
+The update dialog also shows whether the failure was during checking,
+downloading or installation, and offers a link to GitHub Releases for a
+manual installer recovery when automatic updates cannot complete.
+
+A successful unit test or CI package build does not close M0.2–M0.5.
+Record the OS, old and new tagged version, actual artifact type,
+installer outcome and restart version for each native QA attempt.
+
 ## Release tag safety and transient GitHub API failures
 
 **Tags must point to the current `main` commit.** The release workflow
