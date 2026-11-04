@@ -32,16 +32,22 @@ function mockGithub(options = {}) {
 
   const gh = async (args) => {
     calls.push([...args])
-    if (args[0] === 'api') {
-      assert.deepEqual(args, ['api', 'repos/' + repository + '/releases/tags/' + tag])
+    if (args[0] === 'release' && args[1] === 'view') {
+      assert.deepEqual(args, ['release', 'view', tag, '--json', 'apiUrl'])
       if (readFailure) {
         const failure = readFailure
         readFailure = null
         throw new Error('HTTP ' + failure)
       }
-      if (!release.exists) throw new Error('HTTP 404: Not Found')
+      if (!release.exists) throw new Error('no release found for tag ' + tag)
       return JSON.stringify({
-        draft: release.draft, prerelease: release.prerelease,
+        apiUrl: 'https://api.github.com/repos/' + repository + '/releases/123'
+      })
+    }
+    if (args[0] === 'api') {
+      assert.deepEqual(args, ['api', 'repos/' + repository + '/releases/123'])
+      return JSON.stringify({
+        tag_name: tag, draft: release.draft, prerelease: release.prerelease,
         assets: [...release.assets.values()]
       })
     }
