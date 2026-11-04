@@ -28,6 +28,53 @@ git push origin v0.1.0-rc.1
 4. Observe the **Release** GitHub Actions workflow.
 5. After success, download the assets from the corresponding GitHub release.
 
+### Alternative: prepare a new RC from GitHub Actions
+
+For a release candidate, use **Actions → Prepare RC → Run workflow**.
+Select **main** and enter the full new tag, for example
+`v0.1.0-rc.9`. The workflow:
+
+1. Requires the currently selected commit to be the latest `main` head
+   and its exact **push-triggered** main CI run to have succeeded.
+2. Rejects malformed/non-RC tags, versions differing from `package.json`,
+   existing tags, lower RC counters, and RCs issued after a stable tag.
+   It queries *Git tags*, not only successful GitHub Releases.
+3. Creates a new annotated, immutable tag pointing to that main commit.
+   The workflow uses only job-scoped `contents: write` and `actions: write`
+   permissions; no personal access token is needed.
+4. Explicitly dispatches the existing **Release** workflow with that
+   tag as its ref. This is required because tags pushed with the
+   GitHub Actions `GITHUB_TOKEN` do not trigger ordinary `push`
+   workflows. The `workflow_dispatch` event is supported for this case.
+
+The Release workflow still rejects tags that are not at the head of main,
+and the native installed-package smoke gates must succeed before publish.
+
+**Recovery:** If the tag was created but dispatch or publication failed,
+do **not** rerun Prepare RC or move the existing tag. Instead open
+**Actions → Release → Run workflow**, select the existing tag as the ref,
+and retry the release. An existing published tag whose package bytes differ
+must not be overwritten; use a new RC for a fix.
+
+### Two successive published-RC upgrade acceptance
+
+Publish `v0.1.0-rc.9` from green main, verify its tagged Release run,
+and install it on Linux Mint (DEB), Linux (AppImage), and Windows (NSIS).
+After recording each running version, publish `v0.1.0-rc.10` from the
+then-current green main. Perform the *in-application* check, offer,
+download, verification, user consent, installation and relaunch.
+
+For each platform record old/new versions, installer, selected artifact
+and SHA-512 verification, authentication method (without secrets),
+download stage, cancellation/error behavior, and the version **after
+relaunch**. For Mint include the actual `dpkg-query` result and polkit
+authorization outcome. For AppImage include the original executable path;
+for Windows include the actual installed version and installer outcome.
+
+The tagged-install smoke and synthetic CI upgrades do not satisfy this
+end-to-end acceptance. Until these results are recorded and confirmed,
+M0.2–M0.5 remain open and M1 does not start.
+
 ## Native installer smoke gate on release tags
 
 The tagged **Release** workflow now tests its actual tag-stamped installers
