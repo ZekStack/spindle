@@ -258,11 +258,15 @@ passing release/update validation.
 6. **Do not merge on green CI alone** when a stage requires a real GitHub or
    OS-level action; record a short manual QA matrix with results.
 
-**Next action:** close **M0**, starting with release validation for a fresh
-tag. The `v0.1.0-rc.6` run ended in failure with only skipped downstream jobs
-and no validation job exposed via GitHub's Jobs API; this is **not** evidence
-that a specific publisher command failed. Do not mark M0.1 complete before
-a real tag succeeds. Continue with the failed latest tag-push run
-and an actual Debian-to-Debian update between two *newer* releases. Only
-then begin M1 and M2. Feature development should not hide an unverified
-installation path.
+**Latest validation:** `v0.1.0-rc.7` successfully validated its tag,
+built Linux and Windows installers, and published the GitHub Release with
+both update manifests and checksums on November 4, 2026. The earlier
+`v0.1.0-rc.6` run failed without exposing a validation job in GitHub's
+Jobs API; its precise cause remains unconfirmed. Publisher digest verification
+and workflow lint have been implemented as additional reliability gates,
+but must pass CI before M0.1 is closed.
+
+**Next action after M0.1:** validate the **installed** Debian-to-Debian
+updater on Linux Mint (M0.2–M0.3), using two successive releases that
+actually contain the strict DEB selector. Then validate AppImage and NSIS
+upgrades. Do not begin M1 before the M0 installation gates pass.
