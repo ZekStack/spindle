@@ -58,7 +58,7 @@ The project may ship release candidates during any milestone.
 **Goal:** do not build remote-mutation features on top of an updater or
 release pipeline that leaves users on the wrong version.
 
-- [ ] **M0.1 — Release publication end-to-end.** Review the latest failed
+- [x] **M0.1 — Release publication end-to-end.** Review the latest failed
       tag-run diagnostics; ensure a tag from the intended commit validates,
       Linux/Windows builders pass, checksums and both update manifests are
       uploaded, and the GitHub Release becomes visible. Test transient upload
@@ -66,12 +66,17 @@ release pipeline that leaves users on the wrong version.
       Engineering work completed: [x] SHA-256 digest matching of all release
       assets instead of trusting size alone; [x] explicit 404-versus-403/5xx
       release lookup; [x] fail-safe behavior for already-published assets;
-      [x] GitHub Actions workflow lint in CI. **Runtime gate remains open**
-      until a new tag completes real GitHub Release publication.
+      [x] GitHub Actions workflow lint in CI. **Runtime gate passed**:
+      `v0.1.0-rc.8` completed on the merged main commit with all expected
+      published assets and SHA-256 digests; transient failures are covered
+      by automated recovery tests.
 - [ ] **M0.2 — Debian format selection.** On an installed Mint/Ubuntu DEB,
       inspect the running package type, confirm the network download is
       `.deb` (never `.AppImage`), and confirm it matches the release SHA-512.
       Reject missing/ambiguous metadata **before** download or elevation.
+      Engineering work: [x] strict pre-download DEB selection; [x] fail-closed
+      running executable ownership and version preflight before update checks,
+      downloads and installation. **Real Linux Mint QA remains open.**
 - [ ] **M0.3 — Debian install and restart.** Test a real **new RC → newer
       RC** update: single authorization, package-manager success, expected
       `dpkg-query` version, restart into the newly installed binary. Cancel
@@ -258,13 +263,13 @@ passing release/update validation.
 6. **Do not merge on green CI alone** when a stage requires a real GitHub or
    OS-level action; record a short manual QA matrix with results.
 
-**Latest validation:** `v0.1.0-rc.7` successfully validated its tag,
-built Linux and Windows installers, and published the GitHub Release with
-both update manifests and checksums on November 4, 2026. The earlier
-`v0.1.0-rc.6` run failed without exposing a validation job in GitHub's
-Jobs API; its precise cause remains unconfirmed. Publisher digest verification
-and workflow lint have been implemented as additional reliability gates,
-but must pass CI before M0.1 is closed.
+**Latest validation:** `v0.1.0-rc.8` on November 4, 2026 passed
+[Release workflow #41831312133](https://github.com/ZekStack/spindle/actions/runs/41831312133),
+built native Linux and Windows installers, and published all expected
+release assets (including updater manifests, checksums and SHA-256 upload
+digests). This confirms the digest-aware publisher introduced in PR #8.
+The preceding `rc.7` publication had succeeded with the older publisher.
+No real Mint, AppImage or NSIS upgrade has been verified yet.
 
 **Next action after M0.1:** validate the **installed** Debian-to-Debian
 updater on Linux Mint (M0.2–M0.3), using two successive releases that
