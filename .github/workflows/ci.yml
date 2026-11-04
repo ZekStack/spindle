@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+      - name: Package Linux (.deb and AppImage)
+        if: runner.os == 'Linux'
+        run: pnpm exec electron-builder --linux AppImage deb --x64 --publish never
+      - name: Package Windows (.exe)
+        if: runner.os == 'Windows'
+        run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Verify Linux packages
+        if: runner.os == 'Linux'
+        run: node scripts/verify-release-artifacts.mjs linux 0.1.0 release
+      - name: Verify Windows installer
+        if: runner.os == 'Windows'
+        run: node scripts/verify-release-artifacts.mjs windows 0.1.0 release
+      - name: Native preload and IPC smoke (Linux)
+        if: runner.os == 'Linux'
+        env:
+          SPINDLE_SMOKE_TEST: '1'
+        run: xvfb-run -a timeout 45s pnpm exec electron . --no-sandbox

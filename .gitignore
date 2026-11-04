@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+release/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+pnpm-debug.log
+
+# Generated, reproducible platform icons
+build/icons/
+build/icon.ico

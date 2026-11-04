@@ -1,0 +1,71 @@
+# Releasing Spindle
+
+Spindle publishes installers automatically when a supported version tag is
+pushed. The CI workflow builds the exact tagged commit on Ubuntu and Windows
+GitHub-hosted runners, then publishes only after **both** build jobs succeed.
+
+## Tag format
+
+- Stable release: `v0.1.0`, `v1.2.3`
+- Release candidate: `v0.1.0-rc.1`, `v0.1.0-rc.2`
+- Pattern: `vMAJOR.MINOR.PATCH[-rc.N]`
+- RC releases are **prereleases** and do not replace the latest stable release.
+- Other prerelease qualifiers and tags with leading zeros are rejected.
+
+## Recommended release process
+
+1. Merge to `main`; ensure Windows and Linux CI is green.
+2. Review the commit to release and choose the correct version.
+3. Tag that exact commit, then push the tag:
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.1.0-rc.1 -m "Spindle v0.1.0-rc.1"
+git push origin v0.1.0-rc.1
+```
+
+4. Observe the **Release** GitHub Actions workflow.
+5. After success, download the assets from the corresponding GitHub release.
+
+## Files available on each release
+
+| Platform | File |
+| --- | --- |
+| Debian / Ubuntu / Linux Mint | `Spindle-VERSION-linux-x64.deb` |
+| Linux portable | `Spindle-VERSION-linux-x64.AppImage` |
+| Windows installer | `Spindle-Setup-VERSION-windows-x64.exe` |
+| All | `SHA256SUMS.txt` |
+
+This first stage targets x64 only. AppImage users may need `chmod +x`
+before launching the file. Windows installers are **not yet code signed**, so
+SmartScreen may warn. Test actual packaged applications before public
+promotion; build/test checks alone are insufficient.
+
+## Reruns and failures
+
+Build jobs never publish individual partial releases. All three installer
+filenames must be present before the release-publishing job continues.
+
+The publishing job uses the GitHub-provided token; only that job has
+`contents: write`. It checks for an existing release on rerun and replaces
+its uploaded assets without moving or recreating the git tag. Replacing assets
+is incompatible with immutable releases; where immutability is enabled,
+publish a new version rather than trying to replace a released artifact.
+
+Tags are never force-moved by the release workflow. Use a new version (or RC
+counter) to correct an already published release.
+
+## Local packaging
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+pnpm pack:linux # Linux
+pnpm pack:win   # Windows
+```
+
+The `scripts/prepare-release.mjs` command stamps the package version
+from the pushed tag in the *temporary CI checkout*, not in repository source.
+`scripts/generate-icons.mjs` produces Linux PNG and Windows ICO artwork
+from a single self-contained design.

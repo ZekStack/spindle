@@ -1,0 +1,117 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import {
+  validateLogin, validatePage, validateRepository,
+  type AuthStatus, type Organization, type Release, type Repository, type WorkflowRun
+} from '../shared/contracts'
+
+const execFileAsync = promisify(execFile)
+const BASE = 'https://api.github.com'
+type RequestFn = typeof fetch
+type Credentials = { token?: string; method: AuthStatus['method'] }
+
+export class GitHubCredentials {
+  private cache: { value: Credentials; until: number } | null = null
+  async get(): Promise<Credentials> {
+    const env = (process.env.GH_TOKEN || process.env.GITHUB_TOKEN)?.trim()
+    if (env) return { token: env, method: 'environment' }
+    if (this.cache && Date.now() < this.cache.until) return this.cache.value
+    let value: Credentials = { method: 'anonymous' }
+    try {
+      const { stdout } = await execFileAsync('gh', ['auth', 'token'], {
+        timeout: 3_000, maxBuffer: 8_192, windowsHide: true,
+        env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+      })
+      const token = stdout.trim()
+      if (token) value = { token, method: 'github-cli' }
+    } catch { /* gh is optional; unauthenticated public browsing is supported. */ }
+    this.cache = { value, until: Date.now() + 30_000 }
+    return value
+  }
+}
+
+export class GitHubClient {
+  constructor(
+    private readonly requestFn: RequestFn = fetch,
+    private readonly credentials: { get(): Promise<Credentials> } = new GitHubCredentials()
+  ) {}
+  async authStatus(): Promise<AuthStatus> {
+    return { method: (await this.credentials.get()).method }
+  }
+  private async request<T>(path: string): Promise<T> {
+    const creds = await this.credentials.get()
+    const response = await this.requestFn(BASE + path, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'Spindle-Desktop',
+        ...(creds.token ? { Authorization: `Bearer ${creds.token}` } : {})
+      },
+      signal: AbortSignal.timeout(12_000)
+    })
+    if (!response.ok) {
+      if (response.status === 404) throw new Error(
+        'Not found or inaccessible on GitHub. Check the name and your GitHub credentials.')
+      if (response.status === 401) throw new Error('GitHub authentication failed. Sign in using gh auth login.')
+      if (response.status === 403) throw new Error('GitHub access denied or rate limited. Check permissions and API limits.')
+      throw new Error(`GitHub request failed (HTTP ${response.status})`)
+    }
+    return response.json() as Promise<T>
+  }
+  async organization(value: string): Promise<Organization> {
+    const login = validateLogin(value)
+    const org = await this.request<{
+      login: string; name: string | null; avatar_url: string;
+      description: string | null; html_url: string; public_repos: number
+    }>(`/orgs/${encodeURIComponent(login)}`)
+    return { login: org.login, name: org.name, avatarUrl: org.avatar_url,
+      description: org.description, htmlUrl: org.html_url, publicRepos: org.public_repos }
+  }
+  async repositories(value: string, pageValue: number): Promise<Repository[]> {
+    const org = validateLogin(value)
+    const page = validatePage(pageValue)
+    const result = await this.request<Array<{
+      id: number; full_name: string; name: string; description: string | null;
+      private: boolean; archived: boolean; default_branch: string;
+      updated_at: string; html_url: string
+    }>>(`/orgs/${encodeURIComponent(org)}/repos?per_page=100&page=${page}&sort=full_name&direction=asc&type=all`)
+    return result.map(toRepository)
+  }
+  async repository(ownerValue: string, nameValue: string): Promise<Repository> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    return toRepository(await this.request<RemoteRepository>(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`))
+  }
+  async releases(ownerValue: string, nameValue: string): Promise<Release[]> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const result = await this.request<Array<{
+      id: number; tag_name: string; name: string | null; draft: boolean;
+      prerelease: boolean; published_at: string | null; html_url: string
+    }>>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases?per_page=25`)
+    return result.map((r) => ({ id: r.id, tagName: r.tag_name, name: r.name,
+      draft: r.draft, prerelease: r.prerelease, publishedAt: r.published_at, htmlUrl: r.html_url }))
+  }
+  async workflowRuns(ownerValue: string, nameValue: string): Promise<WorkflowRun[]> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const result = await this.request<{ workflow_runs: Array<{
+      id: number; name: string; event: string; status: string; conclusion: string | null;
+      head_branch: string; created_at: string; html_url: string
+    }> }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/runs?per_page=25`)
+    return result.workflow_runs.map((r) => ({ id: r.id, name: r.name, event: r.event,
+      status: r.status, conclusion: r.conclusion, headBranch: r.head_branch,
+      createdAt: r.created_at, htmlUrl: r.html_url }))
+  }
+}
+type RemoteRepository = {
+  id: number; full_name: string; name: string; description: string | null;
+  private: boolean; archived: boolean; default_branch: string;
+  updated_at: string; html_url: string
+}
+function toRepository(r: RemoteRepository): Repository {
+  return { id: r.id, fullName: r.full_name, name: r.name, description: r.description,
+    private: r.private, archived: r.archived, defaultBranch: r.default_branch,
+    updatedAt: r.updated_at, htmlUrl: r.html_url }
+}

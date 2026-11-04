@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spindle-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate semantic version (stable or RC)
+        id: tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node scripts/prepare-release.mjs --validate "$RELEASE_TAG")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-rc.* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Stamp release version from tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/prepare-release.mjs --prepare "$RELEASE_TAG"
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Build app and icons
+        run: pnpm build
+      - name: Package Linux (.deb and .AppImage)
+        if: matrix.platform == 'linux'
+        run: pnpm exec electron-builder --linux AppImage deb --x64 --publish never
+      - name: Package Windows (NSIS .exe)
+        if: matrix.platform == 'windows'
+        run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Validate expected release packages
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: node scripts/verify-release-artifacts.mjs "$RELEASE_PLATFORM" "$RELEASE_VERSION" release
+      - name: Upload platform packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: spindle-${{ matrix.platform }}
+          path: |
+            release/*.deb
+            release/*.AppImage
+            release/*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: spindle-*
+          merge-multiple: true
+          path: dist
+      - name: Verify all three platform assets and generate checksums
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        shell: bash
+        run: |
+          node scripts/verify-release-artifacts.mjs all "$RELEASE_VERSION" dist
+          (cd dist && sha256sum *.deb *.AppImage *.exe > SHA256SUMS.txt)
+      - name: Publish or update release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IS_PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release exists; replacing its downloadable assets."
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+            gh release edit "$RELEASE_TAG" --prerelease="$IS_PRERELEASE" --draft=false
+          elif [[ "$IS_PRERELEASE" == "true" ]]; then
+            gh release create "$RELEASE_TAG" dist/* \
+              --verify-tag --title "Spindle $RELEASE_TAG" \
+              --generate-notes --prerelease --latest=false
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --verify-tag --title "Spindle $RELEASE_TAG" --generate-notes
+          fi
