@@ -85,3 +85,12 @@ platform-specific runtime validation. Do not describe planned features as implem
 - [x] Remember failed update handoffs to prevent immediate repeated prompts
 - [x] Translate installation failure modes and add regression tests
 - [ ] Test the complete DEB update and cancellation on a Linux Mint desktop
+
+## Release publication reliability
+
+- [x] Reject stale release tags that do not match `main`
+- [x] Stage uploads in a draft GitHub Release with retries for transient 5xx
+- [x] Resume uploads by remote filename and size on rerun
+- [x] Verify every installer, updater feed and checksum before publication
+- [x] Test partial success, API 500, permission denial and rerun idempotence
+- [ ] Exercise the draft-to-published recovery against a real GitHub API failure

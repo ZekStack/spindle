@@ -108,3 +108,35 @@ Mint or another Debian-based distribution:
 The DEB path runs `pkexec /usr/bin/dpkg --install <verified-file>` using
 argument arrays, not shell commands. It verifies both the downloaded
 SHA-512 digest and the installed dpkg version before relaunching.
+
+## Release tag safety and transient GitHub API failures
+
+**Tags must point to the current `main` commit.** The release workflow
+checks the tag checkout against `refs/heads/main` before running any builds.
+Creating a version tag from a stale local branch will fail with an actionable
+message instead of publishing obsolete binaries.
+
+For example, the `v0.1.0-rc.5` tag was created from an older commit before
+the Linux DEB updater fixes on `main`. It also encountered an HTTP 500 in
+GitHub's release publication API. Do **not** rerun or move that tag.
+Use a new RC number from a freshly pulled `main`:
+
+```bash
+git switch main
+git pull --ff-only
+git rev-parse HEAD
+git tag -a v0.1.0-rc.6 -m "Spindle v0.1.0-rc.6"
+git push origin v0.1.0-rc.6
+```
+
+Publication now stages a **draft** release before uploading assets one by
+one. It retries transient GitHub HTTP 429/5xx and connection failures, checks
+remote asset names and sizes to resume after partial success, and makes the
+release public **only** when every required installer, update manifest, and
+checksum file is present. It excludes electron-builder debug metadata from
+public downloads.
+
+A failed publication leaves the draft with any successfully uploaded assets.
+A rerun on the **same valid tag** can resume the publication, provided the
+release tag still passes the main-head safety check. Do not rerun old tags
+after the repository has advanced.
