@@ -69,3 +69,21 @@ The `scripts/prepare-release.mjs` command stamps the package version
 from the pushed tag in the *temporary CI checkout*, not in repository source.
 `scripts/generate-icons.mjs` produces Linux PNG and Windows ICO artwork
 from a single self-contained design.
+
+## Auto-update metadata
+
+Each platform build must produce update feed metadata as well as its installer:
+Windows produces `latest.yml`; Linux produces the appropriate
+`latest-linux*.yml` manifest(s). The release workflow uploads them alongside
+installer files and checksums. The publication job stops if any required
+metadata or platform installer is missing.
+
+The first updater-enabled RC is a manual upgrade from `v0.1.0-rc.1` (that
+earlier binary has no update checker). To test the updater, install the first
+updater-enabled RC, publish the next RC, and verify launch check, confirmation,
+download, checksum verification, and installation on Windows, AppImage, and
+DEB. Do not assume passing build CI is equivalent to successful auto-update.
+
+The GitHub repo is private during early development; updater authentication
+uses the user's existing GitHub CLI token or a runtime GH_TOKEN. No credentials
+are distributed inside applications.

@@ -26,7 +26,15 @@ jobs:
         with:
           node-version: '22'
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
+      - name: Export lockfile for bootstrap (Linux only)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo '__SPINDLE_UPDATER_LOCK_BEGIN__'
+          base64 -w0 pnpm-lock.yaml
+          echo
+          echo '__SPINDLE_UPDATER_LOCK_END__'
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
@@ -39,6 +47,12 @@ jobs:
       - name: Package Windows (.exe)
         if: runner.os == 'Windows'
         run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Verify Linux updater metadata
+        if: runner.os == 'Linux'
+        run: node scripts/verify-update-metadata.mjs linux 0.1.0 release
+      - name: Verify Windows updater metadata
+        if: runner.os == 'Windows'
+        run: node scripts/verify-update-metadata.mjs windows 0.1.0 release
       - name: Verify Linux packages
         if: runner.os == 'Linux'
         run: node scripts/verify-release-artifacts.mjs linux 0.1.0 release

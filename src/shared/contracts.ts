@@ -1,5 +1,6 @@
 // The renderer knows only these data shapes and the methods exposed by preload.
 // No filesystem, Node, shell, credentials, or general-purpose IPC access.
+import type { UpdateStatus } from './update-policy'
 export interface Workspace {
   organizations: string[]
   trackedRepositories: string[]
@@ -57,6 +58,11 @@ export interface SpindleApi {
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
   getAuthStatus(): Promise<AuthStatus>
   openGitHub(url: string): Promise<void>
+  getUpdateStatus(): Promise<UpdateStatus>
+  checkForUpdates(): Promise<UpdateStatus>
+  downloadUpdate(): Promise<UpdateStatus>
+  installUpdate(): Promise<UpdateStatus>
+  onUpdateStatus(listener: (state: UpdateStatus) => void): () => void
 }
 export const LOGIN_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/
 export const REPO_PATTERN = /^[a-zA-Z0-9_.-]{1,100}$/

@@ -3,9 +3,10 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { GitHubClient } from './github'
 import { WorkspaceStore } from './store'
+import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
 
-export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github: GitHubClient): void {
+export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github: GitHubClient, updates: UpdateManager): void {
   function allow(event: IpcMainInvokeEvent): void {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
       throw new Error('Untrusted IPC sender')
@@ -50,4 +51,8 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
   handle('spindle:auth:status', () => github.authStatus())
   handle('spindle:github:open', async (url: string) => { await shell.openExternal(parseGitHubUrl(url)) })
+  handle('spindle:update:state', () => updates.snapshot())
+  handle('spindle:update:check', () => updates.check())
+  handle('spindle:update:download', () => updates.download())
+  handle('spindle:update:install', () => updates.install())
 }

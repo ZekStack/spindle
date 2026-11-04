@@ -27,4 +27,7 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   artifactName: 'Spindle-Setup-${version}-windows-x64.${ext}'
-publish: null
+publish:
+  provider: github
+  owner: ZekStack
+  repo: spindle

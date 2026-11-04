@@ -64,7 +64,27 @@ const en = {
   readOnly: 'Read-only foundation',
   readOnlyDescription: 'Release publishing, tag mutation, and workflow actions will arrive in the next stages.',
   home: 'Home',
-  backToOrg: 'Back to organization'
+  backToOrg: 'Back to organization',
+  updateTitle: 'Spindle updates',
+  currentVersion: 'Current version',
+  newVersion: 'New version',
+  checkingUpdates: 'Checking GitHub Releases for updates...',
+  updateOffer: 'A newer version of Spindle is available. Download it now?',
+  updateAvailable: 'Update available',
+  updateReady: 'Ready to install',
+  upToDate: 'Spindle is up to date.',
+  updateCheckManually: 'Check GitHub Releases for updates.',
+  updateDisabled: 'Automatic updates are available only in installed desktop builds.',
+  downloadingUpdate: 'Downloading and verifying the update...',
+  updateDownloaded: 'The update is downloaded and verified. Installing will restart Spindle. On Debian-based Linux, administrator approval may be required.',
+  installingUpdate: 'Starting the installer and restarting Spindle...',
+  updateSecurityNote: 'Nothing is downloaded or installed without your approval. Update packages are checked against their release metadata.',
+  downloadUpdate: 'Download update',
+  installRestart: 'Install and restart',
+  checkUpdates: 'Check for updates',
+  viewReleases: 'View releases',
+  updateStatusUnavailable: 'Unable to read the updater status.',
+  updateActionFailed: 'Update action failed. Try again.'
 } as const
 const hu: Record<keyof typeof en, string> = {
   productDescription: 'A fejlesztői ökoszisztémád egy helyen.',
@@ -129,7 +149,27 @@ const hu: Record<keyof typeof en, string> = {
   readOnly: 'Első, csak olvasható verzió',
   readOnlyDescription: 'A kiadások, címkék és munkafolyamatok kezelése a következő szakaszokban érkezik.',
   home: 'Kezdőlap',
-  backToOrg: 'Vissza a szervezethez'
+  backToOrg: 'Vissza a szervezethez',
+  updateTitle: 'Spindle frissítések',
+  currentVersion: 'Jelenlegi verzió',
+  newVersion: 'Új verzió',
+  checkingUpdates: 'Frissítések ellenőrzése a GitHubon...',
+  updateOffer: 'Új Spindle-verzió érhető el. Szeretnéd letölteni?',
+  updateAvailable: 'Frissítés érhető el',
+  updateReady: 'Telepítésre kész',
+  upToDate: 'A Spindle naprakész.',
+  updateCheckManually: 'Frissítések keresése a GitHub-kiadások között.',
+  updateDisabled: 'Automatikus frissítés csak telepített asztali alkalmazásban érhető el.',
+  downloadingUpdate: 'Frissítés letöltése és ellenőrzése...',
+  updateDownloaded: 'A frissítés letöltve és ellenőrizve. A telepítés újraindítja a Spindle-t. Debian-alapú Linuxon rendszergazdai jóváhagyásra lehet szükség.',
+  installingUpdate: 'Telepítő indítása és a Spindle újraindítása...',
+  updateSecurityNote: 'A jóváhagyásod nélkül nem történik letöltés vagy telepítés. A csomagokat a kiadás metaadatai alapján ellenőrizzük.',
+  downloadUpdate: 'Frissítés letöltése',
+  installRestart: 'Telepítés és újraindítás',
+  checkUpdates: 'Frissítések keresése',
+  viewReleases: 'Kiadások megnyitása',
+  updateStatusUnavailable: 'A frissítő állapota nem érhető el.',
+  updateActionFailed: 'A frissítés sikertelen. Próbáld újra.'
 }
 const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('spindle.language') : null
 void i18n.use(initReactI18next).init({

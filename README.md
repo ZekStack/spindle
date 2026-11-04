@@ -120,3 +120,37 @@ These early builds are **not code signed**. Windows SmartScreen may warn,
 and the installers still require desktop QA prior to public promotion.
 
 See [release procedure](docs/RELEASING.md) for validation and RC rules.
+
+## Desktop auto-updates (from the next tagged release)
+
+When Spindle launches from an installed Windows NSIS, Linux AppImage or Linux
+Debian package, it checks GitHub Releases for updates. If a newer compatible
+release is available, a dialog offers **Download**, followed by **Install and
+restart** when the verified download completes. Download progress and errors are
+visible. There are no silent downloads or installs.
+
+Stable versions receive only newer stable releases. Users running RC builds
+receive newer release candidates and final releases, without downgrading.
+Spindle also provides a **Check for updates** action in its header.
+
+Updaters use release metadata (`latest.yml`, `latest-linux.yml`, etc.) and
+verify the downloaded artifact against the recorded SHA-512 checksum. The
+tag-triggered release pipeline publishes these files alongside the existing
+`.deb`, `.AppImage`, and `.exe` packages.
+
+The repository is **currently private**. On installed machines, Spindle
+reads existing `gh auth token` credentials or `GH_TOKEN`/`GITHUB_TOKEN`
+from its launching environment, without embedding secrets in installers.
+Private release access must be granted to the signed-in user. Public
+releases can be checked without authentication after the repository is
+published publicly.
+
+**Important:** `v0.1.0-rc.1` was built before auto-updates existed, so it
+must be upgraded manually once to an updater-enabled release. Desktop auto
+updates work between later releases. The first update-enabled RC should be
+tested on Windows, AppImage and installed `.deb` before public promotion.
+
+On Debian-based Linux, updating an installed `.deb` may require
+administrator authorization. Unsigned installers and update manifests are
+currently verified using GitHub HTTPS and SHA-512 metadata; stronger signing
+and provenance are planned before general public distribution.
