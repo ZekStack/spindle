@@ -52,7 +52,7 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:auth:status', () => github.authStatus())
   handle('spindle:github:open', async (url: string) => { await shell.openExternal(parseGitHubUrl(url)) })
   handle('spindle:update:state', () => updates.snapshot())
-  handle('spindle:update:check', () => updates.check())
+  handle('spindle:update:check', () => updates.check(true))
   handle('spindle:update:download', () => updates.download())
   handle('spindle:update:install', () => updates.install())
 }

@@ -26,6 +26,11 @@ export function UpdateDialog() {
   }, [t])
 
   useEffect(() => {
+    if (status?.phase === 'error' && status.message === 'not-installed' &&
+        offered.current !== 'install-not-applied') {
+      offered.current = 'install-not-applied'
+      setOpen(true)
+    }
     if (status && ['available', 'ready'].includes(status.phase) &&
         status.availableVersion && offered.current !== status.availableVersion) {
       offered.current = status.availableVersion
@@ -97,7 +102,10 @@ export function UpdateDialog() {
           {(phase === 'error' || actionError) && <p role="alert" className="text-sm text-red-400">
             {actionError || (status?.message === 'auth' ? t('updateErrorAuth') :
               status?.message === 'network' ? t('updateErrorNetwork') :
-              status?.message === 'verification' ? t('updateErrorVerification') : t('updateActionFailed'))}
+              status?.message === 'verification' ? t('updateErrorVerification') :
+              status?.message === 'install-failed' ? t('updateErrorInstallFailed') :
+              status?.message === 'wrong-launcher' ? t('updateErrorWrongLauncher') :
+              status?.message === 'not-installed' ? t('updateErrorNotInstalled') : t('updateActionFailed'))}
           </p>}
         </div>
         <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">{t('updateSecurityNote')}</p>

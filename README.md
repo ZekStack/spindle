@@ -154,3 +154,42 @@ On Debian-based Linux, updating an installed `.deb` may require
 administrator authorization. Unsigned installers and update manifests are
 currently verified using GitHub HTTPS and SHA-512 metadata; stronger signing
 and provenance are planned before general public distribution.
+
+## Linux Mint / Debian update installation
+
+Spindle checks a downloaded DEB's published SHA-512 and verifies its
+package name and version **before** invoking the system package manager.
+With the new installation flow, the app waits for `pkexec dpkg --install`
+to complete, verifies the installed package version with `dpkg-query`,
+and only then relaunches. If elevation is cancelled or the package manager
+fails, Spindle remains open and shows an actionable error instead of
+restarting an unchanged version.
+
+Spindle also records an update handoff. If it starts with the old version
+after an attempted update, the next launch reports the unsuccessful handoff
+instead of automatically showing the same update offer again.
+
+This only applies to Spindle installed from the `.deb` package. The
+AppImage and Windows installer paths still use electron-updater's own
+installation logic. Running an unpacked or different executable cannot
+silently overwrite the installed system DEB.
+
+If an old installed build keeps showing an update after restarting, check:
+
+```bash
+dpkg-query -W -f='${Version}\n' spindle
+command -v spindle
+readlink -f "$(command -v spindle)"
+```
+
+A newer `dpkg-query` version alongside an older running app usually means
+a different copy (for example an old AppImage) is being launched. If the
+system package is still old, download the new `.deb` from GitHub Releases
+and install it using your graphical package installer or:
+
+```bash
+sudo apt install ./Spindle-VERSION-linux-x64.deb
+```
+
+The fix is shipped only in a **newer** release. A running older binary
+cannot acquire the changed installer implementation retroactively.

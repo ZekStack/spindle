@@ -87,3 +87,24 @@ DEB. Do not assume passing build CI is equivalent to successful auto-update.
 The GitHub repo is private during early development; updater authentication
 uses the user's existing GitHub CLI token or a runtime GH_TOKEN. No credentials
 are distributed inside applications.
+
+## Linux DEB updater regression QA
+
+When validating a new release from an older update-enabled build on Linux
+Mint or another Debian-based distribution:
+
+1. Install the old DEB, launch it from the desktop application menu.
+2. Publish a newer RC and confirm the update offer and correct version.
+3. Download and inspect progress. Confirm the pkexec password prompt.
+4. Verify that a successful install changes the system `spindle` package
+   version and that the restarted app also reports the new version.
+5. Deliberately cancel the pkexec prompt: the app must remain open, show
+   an installation error and not report success.
+6. Launch an old unpacked copy: the updater must refuse to install a DEB
+   over an unrelated executable.
+7. Check the unchanged-version recovery dialog if a handoff fails.
+8. Repeat the update on AppImage and Windows NSIS to check for regressions.
+
+The DEB path runs `pkexec /usr/bin/dpkg --install <verified-file>` using
+argument arrays, not shell commands. It verifies both the downloaded
+SHA-512 digest and the installed dpkg version before relaunching.

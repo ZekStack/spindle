@@ -53,6 +53,7 @@ export interface UpdateStatus {
 
 /** Don't leak token-bearing updater URLs or raw HTTP headers to the renderer. */
 export type UpdateErrorCode = 'auth' | 'network' | 'verification' | 'generic'
+  | 'install-failed' | 'not-installed' | 'wrong-launcher'
 
 /** Report only recognized failure categories, never raw token-bearing HTTP errors. */
 export function updateErrorMessage(error: unknown): UpdateErrorCode {
