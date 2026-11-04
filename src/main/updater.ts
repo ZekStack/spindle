@@ -4,6 +4,7 @@ import updaterPackage from 'electron-updater'
 const { autoUpdater } = updaterPackage
 import { GitHubCredentials } from './github'
 import { DebInstallError, installVerifiedDeb } from './deb-install'
+import { selectDownloadedDeb } from './deb-download'
 import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
 import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
@@ -92,11 +93,18 @@ export class UpdateManager {
     })
     this.updater.on('update-downloaded', (info) => {
       if (this.state.phase === 'downloading' && this.state.availableVersion === info.version) {
-        const deb = info.files?.find((entry) => entry.url.split('?')[0].endsWith('.deb'))
-        const checksum = deb?.sha512
-        this.downloadedDeb = checksum && info.downloadedFile?.endsWith('.deb')
-          ? { file: info.downloadedFile, version: info.version, sha512: checksum }
-          : null
+        if (this.runtime.platform === 'linux' && !process.env.APPIMAGE) {
+          try {
+            // A Linux feed can contain both AppImage and DEB assets.
+            // Never hand an AppImage to a Debian package installer, even
+            // if electron-updater selects the wrong asset.
+            this.downloadedDeb = selectDownloadedDeb(info)
+          } catch (error) {
+            this.downloadedDeb = null
+            this.fail(error)
+            return
+          }
+        }
         this.change({ phase: 'ready', percent: 100, message: null })
       }
     })
