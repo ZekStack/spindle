@@ -39,7 +39,10 @@ Native packages should be built and tested on their respective target OS.
 
 The pnpm lockfile is committed and CI uses `pnpm install --frozen-lockfile`.
 The Windows and Linux builds are checked in CI, including a Linux Electron
-preload/IPC smoke test. Packaged installers still need human desktop QA.
+preload/IPC smoke test. Linux CI also installs the generated DEB on an
+ephemeral Ubuntu runner and verifies package ownership, version and updater
+identity through the packaged application. Two-version automatic upgrade
+testing on Linux Mint, AppImage and Windows still requires human desktop QA.
 
 ## First-use workflow
 
