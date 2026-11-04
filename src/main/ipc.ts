@@ -55,5 +55,5 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:update:check', () => updates.check(true))
   handle('spindle:update:download', () => updates.download())
   handle('spindle:update:install', () => updates.install())
-  handle('spindle:update:copy-diagnostics', () => { clipboard.writeText(updates.diagnosticReport()) }
+  handle('spindle:update:copy-diagnostics', () => { clipboard.writeText(updates.diagnosticReport()) })
 }
