@@ -39,6 +39,12 @@ jobs:
       - name: Package Windows (.exe)
         if: runner.os == 'Windows'
         run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Verify Linux updater metadata
+        if: runner.os == 'Linux'
+        run: node scripts/verify-update-metadata.mjs linux 0.1.0 release
+      - name: Verify Windows updater metadata
+        if: runner.os == 'Windows'
+        run: node scripts/verify-update-metadata.mjs windows 0.1.0 release
       - name: Verify Linux packages
         if: runner.os == 'Linux'
         run: node scripts/verify-release-artifacts.mjs linux 0.1.0 release

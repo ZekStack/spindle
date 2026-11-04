@@ -3,11 +3,13 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GitHubClient } from './github'
 import { WorkspaceStore } from './store'
+import { UpdateManager } from './updater'
 import { registerIpc } from './ipc'
 import { parseGitHubUrl } from '../shared/contracts'
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url))
 let window: BrowserWindow | null = null
+let updater: UpdateManager | null = null
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -27,9 +29,10 @@ function createWindow(): void {
     }
   })
   window = mainWindow
+  updater ??= new UpdateManager()
   registerIpc(mainWindow,
     new WorkspaceStore(join(app.getPath('userData'), 'workspace.json')),
-    new GitHubClient())
+    new GitHubClient(), updater)
   mainWindow.once('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try { void shell.openExternal(parseGitHubUrl(url)) } catch { /* Reject external URLs */ }
@@ -51,7 +54,7 @@ function createWindow(): void {
       try {
         // Verifies that the sandboxed preload works and IPC reaches main.
         const result = await mainWindow.webContents.executeJavaScript(
-          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return false; const state = await api.getWorkspace(); return Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories); })()"
+          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return false; const state = await api.getWorkspace(); const update = await api.getUpdateStatus(); return Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories) && update.phase === 'disabled'; })()"
         )
         if (!result) throw new Error('Preload or workspace bridge unavailable')
         clearTimeout(watchdog)
@@ -68,6 +71,13 @@ function createWindow(): void {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     void mainWindow.loadFile(join(ROOT, '../renderer/index.html'))
+  }
+  // The user sees the update offer only after the renderer has mounted.
+  // The service never checks for updates in development or smoke-test mode.
+  if (process.env.SPINDLE_SMOKE_TEST !== '1') {
+    mainWindow.webContents.once('did-finish-load', () => {
+      if (updater) void updater.check()
+    })
   }
   mainWindow.on('closed', () => { window = null })
 }

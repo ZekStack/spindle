@@ -67,3 +67,12 @@ The app runs on Windows and Linux. No organization, username, repository or work
 
 **Merge policy:** A stage is complete only with passing CI and, where applicable,
 platform-specific runtime validation. Do not describe planned features as implemented.
+
+## Desktop auto-updater
+
+- [x] Check GitHub Releases on application launch with manual recheck
+- [x] Opt-in download, progress, verified installer, explicit install/restart
+- [x] Stable/RC version policy and HU/EN UI
+- [x] Generate and publish updater metadata for Windows, AppImage and DEB
+- [ ] Validate end-to-end update across two actual tagged releases on all three installer formats
+- [ ] Sign update manifests/installers before public distribution

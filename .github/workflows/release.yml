@@ -75,6 +75,12 @@ jobs:
       - name: Package Windows (NSIS .exe)
         if: matrix.platform == 'windows'
         run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Validate update feed metadata
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+        run: node scripts/verify-update-metadata.mjs "$RELEASE_PLATFORM" "$RELEASE_VERSION" release
       - name: Validate expected release packages
         shell: bash
         env:
@@ -89,6 +95,8 @@ jobs:
             release/*.deb
             release/*.AppImage
             release/*.exe
+            release/*.yml
+            release/*.blockmap
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -112,7 +120,8 @@ jobs:
         shell: bash
         run: |
           node scripts/verify-release-artifacts.mjs all "$RELEASE_VERSION" dist
-          (cd dist && sha256sum *.deb *.AppImage *.exe > SHA256SUMS.txt)
+          node scripts/verify-update-metadata.mjs all "$RELEASE_VERSION" dist
+          (cd dist && shopt -s nullglob && sha256sum *.deb *.AppImage *.exe *.yml *.blockmap > SHA256SUMS.txt)
       - name: Publish or update release assets
         env:
           GH_TOKEN: ${{ github.token }}

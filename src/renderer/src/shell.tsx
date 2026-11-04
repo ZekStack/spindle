@@ -5,6 +5,7 @@ import { Activity, GitBranch, Globe2, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './components/ui/button'
 import { AddOrganization } from './components/add-organization'
+import { UpdateDialog } from './components/update-dialog'
 
 type Theme = 'dark' | 'light'
 function initialTheme(): Theme {
@@ -42,6 +43,7 @@ export function Shell({ children }: { children: ReactNode }) {
              session.data?.method === 'environment' ? t('environment') : t('anonymous')}
           </div>
           <AddOrganization compact />
+          <UpdateDialog/>
           <Button variant="ghost" size="icon" title={t('language')} aria-label={t('language')} onClick={switchLanguage}>
             <Globe2 className="size-4"/><span className="absolute mt-7 ml-6 text-[9px] font-bold">{i18n.language.toUpperCase()}</span>
           </Button>
@@ -53,7 +55,7 @@ export function Shell({ children }: { children: ReactNode }) {
     </header>
     <main className="mx-auto max-w-[1480px] px-5 pb-16 pt-8 lg:px-10">{children}</main>
     <footer className="mx-auto flex max-w-[1480px] items-center justify-between border-t border-[var(--border)] px-5 py-5 text-xs text-[var(--muted)] lg:px-10">
-      <span>Spindle · v0.1.0</span>
+      <span>Spindle</span>
       <span className="inline-flex items-center gap-1.5"><Activity className="size-3.5" />{t('readOnly')}</span>
     </footer>
   </div>
