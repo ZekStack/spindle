@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, CheckCircle2, Download, ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
+import { ArrowDownToLine, CheckCircle2, ClipboardCopy, Download, ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { UpdateStatus } from '../../../shared/update-policy'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
@@ -10,6 +10,7 @@ export function UpdateDialog() {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false)
   const offered = useRef<string | null>(null)
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export function UpdateDialog() {
 
   async function act(operation: () => Promise<UpdateStatus>): Promise<void> {
     setActionError(null)
+    setDiagnosticsCopied(false)
     try { setStatus(await operation()) }
     catch { setActionError(t('updateActionFailed')) }
   }
@@ -73,6 +75,9 @@ export function UpdateDialog() {
             <DialogTitle className="text-lg font-semibold">{t('updateTitle')}</DialogTitle>
             <DialogDescription className="mt-1 text-xs text-[var(--muted)]">
               {t('currentVersion')}: {status?.currentVersion ?? '—'}
+              {' · '}{t('updateFormat')}: {status?.installType === 'deb' ? t('formatDeb') :
+                status?.installType === 'appimage' ? t('formatAppImage') :
+                status?.installType === 'nsis' ? t('formatNsis') : t('formatUnknown')}
             </DialogDescription>
           </div>
         </div>
@@ -99,6 +104,10 @@ export function UpdateDialog() {
             </div>
             <p className="text-right text-xs text-[var(--muted)]">{status?.percent ?? 0}%</p>
           </div>}
+          {phase === 'error' && status?.failureStage && <p className="mb-2 text-xs text-[var(--muted)]">
+            {t('updateFailureStage')}: {t(status.failureStage === 'download' ? 'stageDownload' :
+              status.failureStage === 'install' ? 'stageInstall' : 'stageCheck')}
+          </p>}
           {(phase === 'error' || actionError) && <p role="alert" className="text-sm text-red-400">
             {actionError || (status?.message === 'auth' ? t('updateErrorAuth') :
               status?.message === 'network' ? t('updateErrorNetwork') :
@@ -110,12 +119,23 @@ export function UpdateDialog() {
         </div>
         <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">{t('updateSecurityNote')}</p>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={() => {
-            void window.spindle.openGitHub('https://github.com/ZekStack/spindle/releases')
-              .catch(() => setActionError(t('updateActionFailed')))
-          }}>
-            <ExternalLink className="size-3.5"/>{t('viewReleases')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" size="sm" onClick={() => {
+              void window.spindle.openGitHub('https://github.com/ZekStack/spindle/releases')
+                .catch(() => setActionError(t('updateActionFailed')))
+            }}>
+              <ExternalLink className="size-3.5"/>{t('viewReleases')}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => {
+              setActionError(null)
+              void window.spindle.copyUpdateDiagnostics()
+                .then(() => setDiagnosticsCopied(true))
+                .catch(() => setActionError(t('updateActionFailed')))
+            }}>
+              <ClipboardCopy className="size-3.5"/>
+              {diagnosticsCopied ? t('updateDiagnosticsCopied') : t('copyUpdateDiagnostics')}
+            </Button>
+          </div>
           <div className="flex gap-2">
             {phase === 'available' && <Button disabled={busy} onClick={() => void act(() => window.spindle.downloadUpdate())}>
               <ArrowDownToLine className="size-4"/>{t('downloadUpdate')}
