@@ -298,7 +298,12 @@ digests). This confirms the digest-aware publisher introduced in PR #8.
 The preceding `rc.7` publication had succeeded with the older publisher.
 No real Mint, AppImage or NSIS upgrade has been verified yet.
 
-**Next action after M0.1:** validate the **installed** Debian-to-Debian
-updater on Linux Mint (M0.2–M0.3), using two successive releases that
-actually contain the strict DEB selector. Then validate AppImage and NSIS
-upgrades. Do not begin M1 before the M0 installation gates pass.
+**Next M0 acceptance action:** use the guarded, manually dispatched
+**Prepare RC** workflow to publish `v0.1.0-rc.9` from a green main commit,
+verify the tag-specific native smoke gates, and install that build on real
+Linux Mint/Windows machines. After recording the installed versions, publish
+`v0.1.0-rc.10` from green main and test the real in-application RC-to-RC
+download, authorization, failure/cancellation and restart on Linux Mint DEB,
+AppImage and Windows NSIS. The manual workflow automates safe tag creation
+and release dispatch, **not** OS-level QA. No native two-release upgrade is
+yet verified. Do not begin M1 before the M0 installation gates pass.
