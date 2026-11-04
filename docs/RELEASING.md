@@ -132,7 +132,8 @@ report includes only a fixed set of fields: operating system, installer type,
 release channel, running/available versions, updater phase, failed operation,
 error category, and timestamp of the last completed check. It excludes raw
 exception messages, local executable paths, release URLs, authorization
-headers and tokens. Attach that report and the **observed** installer version
+headers and tokens. Raw electron-updater logging is disabled so authenticated
+request details are not printed to the app's console. Attach that report and the **observed** installer version
 to any updater regression report. Keep personal logs or authentication tokens
 out of public issues.
 
