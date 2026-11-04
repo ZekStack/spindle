@@ -104,7 +104,7 @@ native GitHub-hosted runners and publishes them only after all builds pass:
 
 Each release includes a `SHA256SUMS.txt` with checksums for all three
 packages. GitHub Actions uses `contents: write` only in the publishing
-job. Assets can be replaced on a rerun without moving the tag.
+job. Reruns resume incomplete draft uploads and verify asset SHA-256 digests; already published assets are never silently replaced.
 
 ```bash
 git switch main
