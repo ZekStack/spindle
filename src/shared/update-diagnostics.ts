@@ -51,7 +51,7 @@ export function formatUpdateDiagnostics(
     'Spindle update diagnostics',
     `Platform: ${safePlatform}`,
     `Installer: ${allowed(status.installType, installTypes)}`,
-    `Channel: ${isPrereleaseVersion(current) ? 'rc' : 'stable'}`,
+    `Channel: ${current === 'unknown' ? 'unknown' : isPrereleaseVersion(current) ? 'rc' : 'stable'}`,
     `Running version: ${current}`,
     `Available version: ${available}`,
     `Phase: ${allowed(status.phase, phases)}`,
