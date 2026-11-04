@@ -38,9 +38,11 @@ test('invalid release versions never become installable', () => {
 
 test('update error details cannot leak tokens to the UI', () => {
   const message = updateErrorMessage(new Error('HTTP 401 Authorization: token ghp-secret-value'))
-  assert.match(message, /GitHub/)
+  assert.equal(message, 'auth')
   assert.equal(message.includes('ghp-secret-value'), false)
-  assert.match(updateErrorMessage(new Error('sha512 mismatch')), /verification/i)
+  assert.equal(updateErrorMessage(new Error('sha512 mismatch')), 'verification')
+  assert.equal(updateErrorMessage(new Error('ETIMEDOUT')), 'network')
+  assert.equal(updateErrorMessage(new Error('Unexpected error')), 'generic')
 })
 
 test('release metadata must contain every platform artifact and SHA-512', () => {

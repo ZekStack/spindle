@@ -95,7 +95,9 @@ export function UpdateDialog() {
             <p className="text-right text-xs text-[var(--muted)]">{status?.percent ?? 0}%</p>
           </div>}
           {(phase === 'error' || actionError) && <p role="alert" className="text-sm text-red-400">
-            {actionError || status?.message || t('updateActionFailed')}
+            {actionError || (status?.message === 'auth' ? t('updateErrorAuth') :
+              status?.message === 'network' ? t('updateErrorNetwork') :
+              status?.message === 'verification' ? t('updateErrorVerification') : t('updateActionFailed'))}
           </p>}
         </div>
         <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">{t('updateSecurityNote')}</p>

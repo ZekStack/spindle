@@ -84,7 +84,10 @@ const en = {
   checkUpdates: 'Check for updates',
   viewReleases: 'View releases',
   updateStatusUnavailable: 'Unable to read the updater status.',
-  updateActionFailed: 'Update action failed. Try again.'
+  updateActionFailed: 'Update action failed. Try again.',
+  updateErrorAuth: 'GitHub Releases are inaccessible. For a private repository, authenticate with gh auth login or GH_TOKEN.',
+  updateErrorNetwork: 'Could not reach GitHub. Check your network connection and retry.',
+  updateErrorVerification: 'The downloaded installer failed verification and was not installed.'
 } as const
 const hu: Record<keyof typeof en, string> = {
   productDescription: 'A fejlesztői ökoszisztémád egy helyen.',
@@ -169,7 +172,10 @@ const hu: Record<keyof typeof en, string> = {
   checkUpdates: 'Frissítések keresése',
   viewReleases: 'Kiadások megnyitása',
   updateStatusUnavailable: 'A frissítő állapota nem érhető el.',
-  updateActionFailed: 'A frissítés sikertelen. Próbáld újra.'
+  updateActionFailed: 'A frissítés sikertelen. Próbáld újra.',
+  updateErrorAuth: 'A GitHub-kiadások nem érhetők el. Privát tárolóhoz jelentkezz be a gh auth login paranccsal vagy adj meg GH_TOKEN-t.',
+  updateErrorNetwork: 'Nem sikerült kapcsolódni a GitHubhoz. Ellenőrizd a hálózatot, majd próbáld újra.',
+  updateErrorVerification: 'A letöltött telepítő ellenőrzése sikertelen, ezért nem lett telepítve.'
 }
 const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('spindle.language') : null
 void i18n.use(initReactI18next).init({

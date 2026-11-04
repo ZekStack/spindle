@@ -48,20 +48,17 @@ export interface UpdateStatus {
   currentVersion: string
   availableVersion: string | null
   percent: number | null
-  message: string | null
+  message: UpdateErrorCode | null
 }
 
 /** Don't leak token-bearing updater URLs or raw HTTP headers to the renderer. */
-export function updateErrorMessage(error: unknown): string {
+export type UpdateErrorCode = 'auth' | 'network' | 'verification' | 'generic'
+
+/** Report only recognized failure categories, never raw token-bearing HTTP errors. */
+export function updateErrorMessage(error: unknown): UpdateErrorCode {
   const raw = error instanceof Error ? error.message : String(error)
-  if (/401|403|404|not.found|unauthori[sz]ed|access.denied|authentication/i.test(raw)) {
-    return 'GitHub releases are unavailable. If the repository is private, run gh auth login or provide GH_TOKEN with read access.'
-  }
-  if (/ENOTFOUND|ETIMEDOUT|ECONN|network|socket|timeout/i.test(raw)) {
-    return 'Cannot reach GitHub. Check the network connection and try again.'
-  }
-  if (/signature|sha512|checksum|hash mismatch/i.test(raw)) {
-    return 'Update verification failed. The downloaded installer was not applied.'
-  }
-  return 'The update could not be completed. Try again or download it from GitHub Releases.'
+  if (/401|403|404|not.found|unauthori[sz]ed|access.denied|authentication/i.test(raw)) return 'auth'
+  if (/ENOTFOUND|ETIMEDOUT|ECONN|network|socket|timeout/i.test(raw)) return 'network'
+  if (/signature|sha512|checksum|hash mismatch/i.test(raw)) return 'verification'
+  return 'generic'
 }
