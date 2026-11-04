@@ -29,6 +29,15 @@ jobs:
       # dependency resolution; switch to --frozen-lockfile once generated.
       - name: Install
         run: pnpm install --no-frozen-lockfile
+      # Temporary one-run bootstrap output; removed after committing the lockfile.
+      - name: Export generated pnpm lockfile
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          echo '__SPINDLE_LOCKFILE_BEGIN__'
+          base64 -w0 pnpm-lock.yaml
+          echo
+          echo '__SPINDLE_LOCKFILE_END__'
       - name: Typecheck
         run: pnpm typecheck
       - name: Tests
