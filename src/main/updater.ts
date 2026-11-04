@@ -8,6 +8,7 @@ import { selectDownloadedDeb } from './deb-download'
 import { SpindleDebUpdater } from './strict-deb-updater'
 import { detectLinuxPackage } from './package-type'
 import { verifyRunningDebPackage } from './deb-preflight'
+import { failedUpdateOperation, formatUpdateDiagnostics } from '../shared/update-diagnostics'
 import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
 import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
 
@@ -52,6 +53,7 @@ export class UpdateManager {
   private installJob: Promise<UpdateStatus> | null = null
   private readonly attemptFile: string | null
   private readonly linuxPackage: ReturnType<typeof detectLinuxPackage>
+  private lastCompletedCheckAt: number | null = null
 
   constructor(
     private readonly updater: Updater = desktopUpdater(),
@@ -75,7 +77,11 @@ export class UpdateManager {
           (runtime.platform === 'linux' && this.linuxPackage !== 'unknown'))
           ? 'idle' : 'disabled',
       currentVersion: runtime.getVersion(), availableVersion: null, percent: null,
-      message: previousFailure ? 'not-installed' : null
+      message: previousFailure ? 'not-installed' : null,
+      installType: runtime.isPackaged
+        ? runtime.platform === 'win32' ? 'nsis' : this.linuxPackage
+        : 'unknown',
+      failureStage: previousFailure ? 'install' : null
     }
     this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = false
@@ -88,14 +94,14 @@ export class UpdateManager {
     this.updater.on('update-available', (info) => {
       this.downloadedDeb = null
       if (!isEligibleUpdate(this.state.currentVersion, info.version)) {
-        this.change({ phase: 'up-to-date', availableVersion: null })
+        this.change({ phase: 'up-to-date', availableVersion: null, failureStage: null })
         return
       }
-      this.change({ phase: 'available', availableVersion: info.version, percent: null, message: null })
+      this.change({ phase: 'available', availableVersion: info.version, percent: null, message: null, failureStage: null })
     })
     this.updater.on('update-not-available', () => {
       if (this.state.phase !== 'ready' && this.state.phase !== 'downloading') {
-        this.change({ phase: 'up-to-date', availableVersion: null, message: null })
+        this.change({ phase: 'up-to-date', availableVersion: null, message: null, failureStage: null })
       }
     })
     this.updater.on('download-progress', (progress) => {
@@ -120,13 +126,17 @@ export class UpdateManager {
             return
           }
         }
-        this.change({ phase: 'ready', percent: 100, message: null })
+        this.change({ phase: 'ready', percent: 100, message: null, failureStage: null })
       }
     })
     this.updater.on('error', (error) => this.fail(error))
   }
 
   snapshot(): UpdateStatus { return { ...this.state } }
+
+  diagnosticReport(): string {
+    return formatUpdateDiagnostics(this.snapshot(), this.runtime.platform, this.lastCompletedCheckAt)
+  }
 
   private change(patch: Partial<UpdateStatus>): UpdateStatus {
     this.state = { ...this.state, ...patch }
@@ -141,7 +151,8 @@ export class UpdateManager {
         : error.reason === 'version-mismatch' ? 'not-installed'
         : error.reason === 'package-manager' ? 'install-failed' : 'verification'
       : updateErrorMessage(error)
-    return this.change({ phase: 'error', percent: null, message: code })
+    return this.change({ phase: 'error', percent: null, message: code,
+      failureStage: failedUpdateOperation(this.state.phase) })
   }
 
   check(manual = false): Promise<UpdateStatus> {
@@ -152,7 +163,7 @@ export class UpdateManager {
     if (this.state.phase === 'disabled' || this.state.phase === 'downloading' ||
         this.state.phase === 'ready' || this.state.phase === 'installing') return Promise.resolve(this.snapshot())
     if (this.checkJob) return this.checkJob
-    this.change({ phase: 'checking', percent: null, message: null })
+    this.change({ phase: 'checking', percent: null, message: null, failureStage: null })
     this.checkJob = (async () => {
       try {
         // GitHub is currently private. Authentication stays exclusively in main.
@@ -169,7 +180,7 @@ export class UpdateManager {
         await this.updater.checkForUpdates()
       } catch (error) { this.fail(error) }
       return this.snapshot()
-    })().finally(() => { this.checkJob = null })
+    })().finally(() => { this.lastCompletedCheckAt = Date.now(); this.checkJob = null })
     return this.checkJob
   }
 
@@ -179,7 +190,7 @@ export class UpdateManager {
     if (this.state.phase !== 'available') return Promise.reject(new Error('No update is ready for download'))
     this.lastProgress = -1
     this.downloadedDeb = null
-    this.change({ phase: 'downloading', percent: 0, message: null })
+    this.change({ phase: 'downloading', percent: 0, message: null, failureStage: null })
     this.downloadJob = (async () => {
       try {
         if (this.linuxPackage === 'deb') {
@@ -198,7 +209,7 @@ export class UpdateManager {
       return Promise.reject(new Error('A verified update has not finished downloading'))
     }
     const target = this.state.availableVersion
-    this.change({ phase: 'installing', message: null })
+    this.change({ phase: 'installing', message: null, failureStage: null })
     this.installJob = (async () => {
       try {
         if (this.linuxPackage === 'deb') {
