@@ -29,7 +29,7 @@ function fakeInstaller(options: {
         return 'spindle: /opt/Spindle/spindle'
       }
       if (command === 'dpkg-query' && args[0] === '--show') return currentVersion
-      if (command === 'dpkg-deb') return (options.pkg ?? 'spindle') + '\n' + (options.version ?? '0.1.0~rc.3')
+      if (command === 'dpkg-deb') return 'Package: ' + (options.pkg ?? 'spindle') + '\nVersion: ' + (options.version ?? '0.1.0~rc.3')
       if (command === '/usr/bin/pkexec') {
         if (options.failElevation) throw new Error('polkit authorization dismissed')
         if (!options.doNotUpgrade) currentVersion = options.version ?? '0.1.0~rc.3'
