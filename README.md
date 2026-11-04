@@ -104,7 +104,10 @@ are supported. The suffix is embedded into the packaged app's version.
 RC releases are GitHub prereleases and **do not supersede latest stable**.
 
 The `Release` GitHub Actions workflow builds three **x64** packages on
-native GitHub-hosted runners and publishes them only after all builds pass:
+native GitHub-hosted runners and publishes them only after all builds and
+**native tagged-package smoke checks** pass (installed DEB, actual AppImage
+runtime and installed NSIS). These gates do not substitute for complete
+interactive updater QA:
 
 | OS | Download |
 | --- | --- |
