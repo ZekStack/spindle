@@ -3,8 +3,9 @@
 A cross-platform desktop workspace for GitHub organizations, repositories,
 releases and GitHub Actions — developed by [ZekStack](https://github.com/ZekStack).
 
-Spindle is designed for developers who manage repositories across multiple
-organizations. It is not tied to Hitec Smart Home or a fixed repository catalog.
+Spindle brings repositories, releases, and GitHub Actions from multiple
+GitHub organizations into one desktop workspace. Add the organizations and
+repositories you want to follow without a predefined catalog.
 
 > **Status: R1 foundation (early development).** The UI can currently discover,
 > track and inspect repositories, releases and workflow runs. It does **not yet**
@@ -42,7 +43,7 @@ preload/IPC smoke test. Packaged installers still need human desktop QA.
 
 ## First-use workflow
 
-1. Open Spindle and add any GitHub organization (for example ZekStack).
+1. Open Spindle and add a GitHub organization by its login name.
 2. Browse its accessible repositories. Private repositories require sufficient
    GitHub access; anonymous browsing is limited to public resources.
 3. Star repositories to track them in your local workspace.
