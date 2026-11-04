@@ -87,9 +87,11 @@ export async function installVerifiedDeb(
   catch {
     throw new DebInstallError('wrong-package', 'Cannot read the downloaded Debian package metadata')
   }
-  const [name, packageVersion] = fields.split(/\r?\n/)
-  if (name?.trim() !== PACKAGE_NAME ||
-      normalizedDebVersion(packageVersion ?? '') !== expectedVersion) {
+  // dpkg-deb --field returns labeled lines: "Package: spindle", etc.
+  const name = /^Package:\s*(.+)$/im.exec(fields)?.[1].trim()
+  const packageVersion = /^Version:\s*(.+)$/im.exec(fields)?.[1].trim()
+  if (name !== PACKAGE_NAME || !packageVersion ||
+      normalizedDebVersion(packageVersion) !== expectedVersion) {
     throw new DebInstallError('wrong-package', 'Downloaded Debian package name or version does not match the release')
   }
 
