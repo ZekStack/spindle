@@ -132,6 +132,9 @@ visible. There are no silent downloads or installs.
 Stable versions receive only newer stable releases. Users running RC builds
 receive newer release candidates and final releases, without downgrading.
 Spindle also provides a **Check for updates** action in its header.
+The update dialog can copy an allowlisted, credential-free diagnostic
+report for troubleshooting. Failures identify the update stage and installer
+format; the GitHub Releases link remains available for manual recovery.
 
 Updaters use release metadata (`latest.yml`, `latest-linux.yml`, etc.) and
 verify the downloaded artifact against the recorded SHA-512 checksum. The
