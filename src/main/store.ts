@@ -4,6 +4,16 @@ import { validateLogin, validateRepository, type Workspace } from '../shared/con
 
 const empty = (): Workspace => ({ organizations: [], trackedRepositories: [] })
 
+function uniqueIgnoreCase(values: string[]): string[] {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    const key = value.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export class WorkspaceStore {
   constructor(private readonly file: string) {}
   load(): Workspace {
@@ -21,8 +31,10 @@ export class WorkspaceStore {
       const [owner, name] = value.split('/')
       return `${validateLogin(owner)}/${validateRepository(name)}`
     })
-    return { organizations: [...new Set(organizations)],
-      trackedRepositories: [...new Set(trackedRepositories)] }
+    return {
+      organizations: uniqueIgnoreCase(organizations),
+      trackedRepositories: uniqueIgnoreCase(trackedRepositories)
+    }
   }
   private save(workspace: Workspace): Workspace {
     mkdirSync(dirname(this.file), { recursive: true })
@@ -43,8 +55,6 @@ export class WorkspaceStore {
     const login = validateLogin(value)
     const state = this.load()
     state.organizations = state.organizations.filter((org) => org.toLowerCase() !== login.toLowerCase())
-    state.trackedRepositories = state.trackedRepositories.filter((name) =>
-      name.split('/')[0].toLowerCase() !== login.toLowerCase())
     return this.save(state)
   }
   trackRepository(ownerValue: string, repoValue: string, tracked: boolean): Workspace {
@@ -52,12 +62,17 @@ export class WorkspaceStore {
     const name = validateRepository(repoValue)
     if (typeof tracked !== 'boolean') throw new Error('Invalid tracking option')
     const state = this.load()
-    const actualOwner = state.organizations.find((org) => org.toLowerCase() === owner.toLowerCase())
-    if (!actualOwner) throw new Error('Add the organization first')
-    const fullName = `${actualOwner}/${name}`
-    state.trackedRepositories = state.trackedRepositories.filter((entry) =>
-      entry.toLowerCase() !== fullName.toLowerCase())
-    if (tracked) state.trackedRepositories.push(fullName)
+    // Repositories are independent workspace shortcuts: an account's
+    // personal repository or a repo outside saved organizations is valid.
+    // IPC verifies GitHub accessibility before adding; untracking is local.
+    const fullName = `${owner}/${name}`
+    const existing = state.trackedRepositories.find((entry) =>
+      entry.toLowerCase() === fullName.toLowerCase())
+    if (tracked && !existing) state.trackedRepositories.push(fullName)
+    if (!tracked) {
+      state.trackedRepositories = state.trackedRepositories.filter((entry) =>
+        entry.toLowerCase() !== fullName.toLowerCase())
+    }
     return this.save(state)
   }
 }
