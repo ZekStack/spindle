@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, CircleCheck, CircleX, FolderOpen, LoaderCircle, RefreshCw, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, CircleCheck, CircleX, FolderOpen, LoaderCircle, RefreshCw, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { activeJob, type JobErrorCode, type JobRecord } from '../../../shared/jobs'
 import { Button } from './ui/button'
@@ -15,6 +15,9 @@ function errorKey(code: JobErrorCode | null): string {
     case 'network': return 'activityErrorNetwork'
     case 'timeout': return 'activityErrorTimeout'
     case 'interrupted': return 'activityErrorInterrupted'
+    case 'git-unavailable': return 'activityGitUnavailable'
+    case 'git-failed': return 'activityLocalGitFailed'
+    case 'output-limit': return 'activityErrorOutputLimit'
     default: return 'activityErrorUnknown'
   }
 }
@@ -50,7 +53,7 @@ export function ActivityDialog() {
 
   const runningCount = jobs.filter((job) => activeJob(job.phase)).length
   const filtered = jobs.filter((job) => filter === 'active' ? activeJob(job.phase) : !activeJob(job.phase))
-  const detail = jobs.find((job) => job.id === selected) ?? filtered[0] ?? null
+  const detail = filtered.find((job) => job.id === selected) ?? filtered[0] ?? null
 
   async function inspectLocal() {
     setBusy(true)
@@ -128,7 +131,8 @@ export function ActivityDialog() {
               <div className="flex items-center gap-2 text-sm font-medium">
                 {activeJob(job.phase) ? <LoaderCircle className="size-3.5 animate-spin text-orange-500"/>
                   : job.phase === 'completed' ? <CircleCheck className="size-3.5 text-emerald-500"/>
-                    : <CircleX className="size-3.5 text-red-400"/>}
+                    : job.phase === 'partial' ? <AlertTriangle className="size-3.5 text-amber-500"/>
+                      : <CircleX className="size-3.5 text-red-400"/>}
                 <span className="min-w-0 flex-1 truncate">{job.repository}</span>
               </div>
               <p className="mt-1 text-xs text-[var(--muted)]">
@@ -158,10 +162,15 @@ export function ActivityDialog() {
                   : t('activityNotStarted')}
               </p>
               {detail.errorCode && <p role="alert" className="mt-3 text-sm text-red-400">
-                {detail.kind === 'local-git-inspection'
-                  ? t(detail.errorCode === 'not-found'
-                    ? 'activityGitUnavailable' : 'activityLocalGitFailed')
-                  : t(errorKey(detail.errorCode))}
+                {t(detail.kind === 'local-git-inspection' && detail.errorCode === 'not-found'
+                  ? 'activityGitUnavailable' : errorKey(detail.errorCode))}
+              </p>}
+              {detail.errorCode && detail.retryable !== undefined &&
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  {t(detail.retryable ? 'activityRetryable' : 'activityActionRequired')}
+                </p>}
+              {detail.phase === 'partial' && <p role="status" className="mt-2 text-xs text-amber-400">
+                {t('activityPartialNotice')}
               </p>}
               <div className="mt-4 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3"
                 aria-label={t('activityOutput')}>
