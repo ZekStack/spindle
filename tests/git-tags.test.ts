@@ -35,7 +35,7 @@ test('tag names and mutation fields reject unsafe or ambiguous ref inputs', () =
     '--force', 'refs/tags/v1', 'v1..2', 'a//b', '.hidden', 'a/.hidden', 'a/b.',
     'tag.lock', 'x\\y', 'x\ny', 'a*', 'a?b', 'a@{1}', '', 'x'.repeat(101)
   ]) {
-    assert.throws(() => validateTagName(rejected), undefined, rejected)
+    assert.throws(() => validateTagName(rejected), /Invalid Git tag name/, rejected)
   }
   const oid = 'a'.repeat(40)
   assert.deepEqual(validateTagMutation({
