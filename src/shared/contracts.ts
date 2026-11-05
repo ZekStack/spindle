@@ -5,6 +5,12 @@ export interface Workspace {
   organizations: string[]
   trackedRepositories: string[]
 }
+/** GitHub pagination metadata, not inferred from a full final page. */
+export interface PageResult<T> {
+  items: T[]
+  hasNext: boolean
+  totalCount?: number
+}
 export interface OrganizationSuggestion {
   login: string
   avatarUrl: string | null
@@ -93,9 +99,11 @@ export interface SpindleApi {
   removeOrganization(login: string): Promise<Workspace>
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>
   getOrganization(login: string): Promise<Organization>
-  searchOrganizations(query: string, page: number): Promise<OrganizationSuggestion[]>
-  listRepositories(login: string, page: number): Promise<Repository[]>
-  searchRepositories(query: string, page: number): Promise<Repository[]>
+  searchOrganizations(query: string, page: number): Promise<PageResult<OrganizationSuggestion>>
+  listAccessibleOrganizations(page: number): Promise<PageResult<OrganizationSuggestion>>
+  listRepositories(login: string, page: number): Promise<PageResult<Repository>>
+  searchOrganizationRepositories(login: string, query: string, page: number): Promise<PageResult<Repository>>
+  searchRepositories(query: string, page: number): Promise<PageResult<Repository>>
   getRepository(owner: string, name: string): Promise<Repository>
   listReleases(owner: string, name: string): Promise<Release[]>
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
