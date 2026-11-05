@@ -7,7 +7,7 @@ import { parseRepositoryFullName } from '../../../shared/contracts'
 import { Button } from './ui/button'
 import { Chip, ErrorState } from './common'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
-import { errorMessage } from '../lib/utils'
+import { localizedGitHubError } from '../lib/utils'
 
 export function AddRepository({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation()
@@ -91,7 +91,7 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
       </form>
       <p className="mt-2 text-xs text-[var(--muted)]">{t('repositorySearchHint')}</p>
       {invalidPath && <p role="alert" className="mt-3 text-sm text-red-400">{t('repositoryInvalidPath')}</p>}
-      {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-400">{errorMessage(mutation.error)}</p>}
+      {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-400">{localizedGitHubError(mutation.error, t)}</p>}
       {mutation.isSuccess && <p role="status" className="mt-3 text-sm text-emerald-400">
         {t('repositoryAdded')}
       </p>}
