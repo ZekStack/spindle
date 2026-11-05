@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { LocalWorkspaceStore } from '../src/main/local-workspaces'
 import { cloneCheckout, syncCheckout, validateSyncCheckout } from '../src/main/git-sync'
 import { JobManager } from '../src/main/jobs'
@@ -45,7 +46,7 @@ test('clone and sync use saved roots, validated GitHub origins, and ff-only pull
     // Intercept only this test's synthetic HTTPS origin using Git's documented
     // config environment. Production never receives a renderer-supplied URL.
     process.env.GIT_CONFIG_COUNT = '1'
-    process.env.GIT_CONFIG_KEY_0 = `url.file://${bare}.insteadOf`
+    process.env.GIT_CONFIG_KEY_0 = `url.${pathToFileURL(bare).href}.insteadOf`
     process.env.GIT_CONFIG_VALUE_0 = 'https://github.com/ExampleOrg/project.git'
 
     const store = new LocalWorkspaceStore(join(root, 'locations.json'))
