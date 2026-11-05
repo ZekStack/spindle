@@ -216,9 +216,19 @@ real status rather than showing a spinner indefinitely.
       and marks previously running jobs interrupted after restart.
       **Remaining acceptance:** manual Linux/Windows inspection, dialog
       close/reopen, cancellation and restart QA on installed builds.
-- [ ] **M2.4 — Reliability and security.** Explicit retryability and
-      partial-completion states, sanitized logs, no shell interpolation,
-      and deterministic tests for cancel/restart/timeout failures.
+- [ ] **M2.4 — Reliability and security.** [x] Activity distinguishes
+      partially completed operations from total failure without losing
+      successful inspection steps; [x] typed retryability separates
+      temporary network/rate-limit/timeout errors from permission,
+      missing-Git and invalid-repository failures; [x] sanitized
+      operation output and clear localized retry guidance;
+      [x] Git child processes run without a shell, use process-group
+      termination on Linux, escalate stalled cancellation and bound output;
+      [x] focused partial-result, permission-failure, cancellation and
+      restart-history regression checks. Existing activity history remains
+      readable without migration. **Remaining acceptance:** real Linux
+      Mint and Windows tests for cancellation/process cleanup and recovery
+      with installed builds.
 
 **Exit gate:** a simulated long-running job continues with the Activity
 dialog closed, can be cancelled safely, and retains a meaningful final
