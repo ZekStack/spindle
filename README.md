@@ -63,8 +63,12 @@ still requires human desktop QA.
    `owner/repository`. Personal repositories and repositories from organizations
    you have not added are supported. For private repositories, switch to an
    account with access; anonymous browsing is limited to public resources.
-3. Optionally select **Add organization** to search for an organization or
-   enter its login directly, then browse its repositories and star useful ones.
+3. Select **Add organization** to browse organizations accessible to
+   the selected GitHub account, search public organizations, or enter any
+   organization login directly. In an organization, use the search field
+   to find repositories across all pages, including accessible private
+   repositories, and star useful ones. GitHub pagination controls determine
+   whether a next page actually exists.
 4. Open a tracked repository to inspect metadata, Releases and Actions runs,
    or untrack it directly in the workspace. Removing an organization does
    **not** delete its independently tracked repository shortcuts.
@@ -73,6 +77,11 @@ Adding/removing a saved organization and tracking/untracking a repository
 only changes local workspace preferences. It never modifies GitHub
 organizations, memberships or repositories. Repository searches use GitHub's
 API, and search results depend on the selected account's permissions.
+GitHub authentication failures, forbidden resources, missing resources,
+API rate limits and connection failures display distinct, actionable
+errors in English and Hungarian. On a public/anonymous account,
+the **Your GitHub organizations** list requires signing in, but public
+organization search and public repositories remain available.
 
 ## Architecture and security
 
