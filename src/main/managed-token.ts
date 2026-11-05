@@ -1,11 +1,37 @@
-import { app, safeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { readFile, rename, rm, lstat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+// Defer Electron's runtime module loading until the app actually needs an
+// OS-protected credential. Node's unit test runtime exposes Electron as the
+// executable path, not the main-process API, so static imports are invalid.
+const electronCipher: SecureCipher = {
+  async isAsyncEncryptionAvailable() {
+    const { safeStorage } = await import('electron')
+    return safeStorage.isAsyncEncryptionAvailable()
+  },
+  async getSelectedStorageBackend() {
+    const { safeStorage } = await import('electron')
+    return safeStorage.getSelectedStorageBackend()
+  },
+  async encryptStringAsync(value) {
+    const { safeStorage } = await import('electron')
+    return safeStorage.encryptStringAsync(value)
+  },
+  async decryptStringAsync(data) {
+    const { safeStorage } = await import('electron')
+    return safeStorage.decryptStringAsync(data)
+  }
+}
+
+async function defaultTokenPath(): Promise<string> {
+  const { app } = await import('electron')
+  return join(app.getPath('userData'), 'github-token.enc')
+}
+
 export interface SecureCipher {
   isAsyncEncryptionAvailable(): Promise<boolean>
-  getSelectedStorageBackend(): string
+  getSelectedStorageBackend(): string | Promise<string>
   encryptStringAsync(value: string): Promise<Buffer>
   decryptStringAsync(data: Buffer): Promise<{ result: string; shouldReEncrypt: boolean }>
 }
@@ -17,9 +43,8 @@ export interface SecureCipher {
  */
 export class ManagedGitHubTokenStore {
   constructor(
-    private readonly cipher: SecureCipher = safeStorage,
-    private readonly file: () => string =
-      () => join(app.getPath('userData'), 'github-token.enc'),
+    private readonly cipher: SecureCipher = electronCipher,
+    private readonly file: () => string | Promise<string> = defaultTokenPath,
     private readonly platform: string = process.platform
   ) {}
 
@@ -28,7 +53,7 @@ export class ManagedGitHubTokenStore {
       if (!(await this.cipher.isAsyncEncryptionAvailable())) return false
       if (this.platform === 'linux') {
         return ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6']
-          .includes(this.cipher.getSelectedStorageBackend())
+          .includes(await this.cipher.getSelectedStorageBackend())
       }
       return this.platform === 'win32' || this.platform === 'darwin'
     } catch { return false }
@@ -37,7 +62,7 @@ export class ManagedGitHubTokenStore {
   async load(): Promise<string | null> {
     if (!(await this.available())) return null
     try {
-      const path = this.file()
+      const path = await this.file()
       const info = await lstat(path)
       if (!info.isFile() || info.isSymbolicLink() || info.size > 16_384) return null
       const data = await readFile(path)
@@ -59,7 +84,7 @@ export class ManagedGitHubTokenStore {
     if (!encrypted.length || encrypted.length > 16_384) {
       throw new Error('Secure credential storage is unavailable')
     }
-    const target = this.file()
+    const target = await this.file()
     const tmp = target + '.' + randomUUID() + '.tmp'
     try {
       await writeFile(tmp, encrypted, { flag: 'wx', mode: 0o600 })
@@ -70,7 +95,7 @@ export class ManagedGitHubTokenStore {
   }
 
   async clear(): Promise<void> {
-    await rm(this.file(), { force: true })
+    await rm(await this.file(), { force: true })
   }
 }
 
