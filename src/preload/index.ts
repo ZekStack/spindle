@@ -25,6 +25,7 @@ const api: SpindleApi = {
   cloneRepository: (owner, name, root) => ipcRenderer.invoke('spindle:local:clone', owner, name, root),
   syncLinkedRepository: (owner, name, operation) =>
     ipcRenderer.invoke('spindle:local:sync', owner, name, operation),
+  previewLinkedPull: (owner, name) => ipcRenderer.invoke('spindle:local:pull-preview', owner, name),
   addOrganization: (login) => ipcRenderer.invoke('spindle:workspace:add-org', login),
   removeOrganization: (login) => ipcRenderer.invoke('spindle:workspace:remove-org', login),
   trackRepository: (owner, name, tracked) =>
