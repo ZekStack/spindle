@@ -1,52 +1,116 @@
+import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, Building2, Github, Layers3 } from 'lucide-react'
+import { ArrowUpRight, Building2, GitBranch, Search, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AddOrganization } from '../components/add-organization'
 import { Busy, ErrorState } from '../components/common'
-import { Chip } from '../components/common'
 
+/** Local workspace first: no feed mocks, promotional panels or extra API calls. */
 export function HomePage() {
   const { t } = useTranslation()
-  const workspace = useQuery({ queryKey: ['workspace'], queryFn: () => window.spindle.getWorkspace() })
-  return <div className="space-y-9">
-    <section className="relative overflow-hidden rounded-3xl border border-orange-500/20 bg-[#171716] p-8 text-white shadow-lg md:p-12">
-      <div className="pointer-events-none absolute -right-24 -top-36 size-[440px] rounded-full bg-orange-500/14 blur-[85px]" />
-      <div className="relative max-w-2xl">
-        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-300">
-          <Github className="size-3.5"/> GitHub Desktop Workspace
-        </div>
-        <h1 className="text-3xl font-bold tracking-tight md:text-5xl">{t('welcome')}</h1>
-        <p className="mt-5 max-w-xl text-base leading-relaxed text-neutral-400">{t('welcomeDetails')}</p>
-        <div className="mt-8"><AddOrganization/></div>
+  const [search, setSearch] = useState('')
+  const workspace = useQuery({
+    queryKey: ['workspace'], queryFn: () => window.spindle.getWorkspace()
+  })
+  const tracked = workspace.data?.trackedRepositories ?? []
+  const organizations = workspace.data?.organizations ?? []
+  const term = search.trim().toLocaleLowerCase()
+  const matchingTracked = useMemo(() => tracked.filter((name) =>
+    name.toLocaleLowerCase().includes(term)), [tracked, term])
+  const matchingOrganizations = useMemo(() => organizations.filter((login) =>
+    login.toLocaleLowerCase().includes(term)), [organizations, term])
+  const hasTracked = tracked.length > 0
+
+  return <div className="space-y-6">
+    <div className="flex flex-col gap-4 border-b border-[var(--border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight">{t('workspaceTitle')}</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">{t('workspaceSummary')}</p>
+        {workspace.data && <p className="mt-2 text-xs text-[var(--muted)]">
+          {organizations.length} {t('organizations').toLocaleLowerCase()} · {tracked.length} {t('tracked').toLocaleLowerCase()}
+        </p>}
       </div>
-    </section>
-    <section>
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">{t('yourOrganizations')}</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">{t('organizations')}</p>
-        </div>
-        {workspace.data && <Chip tone="orange">{workspace.data.organizations.length}</Chip>}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label className="relative block w-full sm:w-80 xl:w-96">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"/>
+          <input value={search} onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('workspaceSearch')} aria-label={t('workspaceSearch')}
+            className="field h-9 w-full pl-9 text-sm" />
+        </label>
+        <AddOrganization compact/>
       </div>
-      {workspace.isPending ? <Busy/> : workspace.isError ? <ErrorState error={workspace.error} retry={() => { void workspace.refetch() }}/> :
-        workspace.data.organizations.length ? <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {workspace.data.organizations.map((login) => <Link key={login} to="/org/$login" params={{ login }}
-            className="panel group flex min-h-36 items-center justify-between gap-4 p-6 no-underline transition hover:border-orange-500/35 hover:bg-[var(--surface-2)]">
-            <div className="flex items-center gap-4">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500"><Building2 className="size-6"/></div>
-              <div className="min-w-0">
-                <div className="truncate font-semibold text-[var(--fg)]">{login}</div>
-                <p className="mt-1 text-xs text-[var(--muted)]">{t('repositories')}</p>
-              </div>
+    </div>
+
+    {workspace.isPending ? <Busy/> : workspace.isError
+      ? <ErrorState error={workspace.error} retry={() => { void workspace.refetch() }}/>
+      : <div className={hasTracked
+        ? 'grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]'
+        : 'space-y-5'}>
+        {hasTracked && <section className="panel min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+            <div>
+              <h2 className="font-semibold">{t('workspaceTracked')}</h2>
+              <p className="mt-1 text-xs text-[var(--muted)]">{t('workspaceTrackedHint')}</p>
             </div>
-            <ArrowUpRight className="size-5 shrink-0 text-[var(--muted)] transition group-hover:text-orange-400"/>
-          </Link>)}
-        </div> : <div className="panel flex flex-col items-center p-12 text-center">
-          <Layers3 className="mb-4 size-8 text-orange-500/80"/>
-          <h3 className="font-medium">{t('noOrganizations')}</h3>
-          <p className="mt-2 text-sm text-[var(--muted)]">{t('noOrganizationsDetails')}</p>
-        </div>}
-    </section>
+            <span className="text-xs text-[var(--muted)]">{tracked.length}</span>
+          </div>
+          {matchingTracked.length ? <div>
+            {matchingTracked.map((fullName) => {
+              const [owner, name] = fullName.split('/')
+              return <Link key={fullName.toLocaleLowerCase()} to="/repo/$owner/$name"
+                params={{ owner, name }}
+                className="group flex items-center gap-3 border-b border-[var(--border)] px-5 py-3.5 text-[var(--fg)] no-underline transition-colors last:border-b-0 hover:bg-[var(--hover)]">
+                <GitBranch className="size-4 shrink-0 text-orange-500"/>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium group-hover:text-orange-400">{name}</div>
+                  <div className="mt-0.5 truncate text-xs text-[var(--muted)]">{owner}</div>
+                </div>
+                <ArrowUpRight className="size-4 shrink-0 text-[var(--muted)]"/>
+              </Link>
+            })}
+          </div> : <p className="px-5 py-8 text-sm text-[var(--muted)]">{t('workspaceNoMatches')}</p>}
+        </section>}
+
+        <section className="panel min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+            <div>
+              <h2 className="font-semibold">{t('workspaceOrganizations')}</h2>
+              <p className="mt-1 text-xs text-[var(--muted)]">{t('workspaceOrganizationsHint')}</p>
+            </div>
+            <span className="text-xs text-[var(--muted)]">{organizations.length}</span>
+          </div>
+          {matchingOrganizations.length ? <div className={hasTracked
+            ? '' : 'grid gap-0 md:grid-cols-2 2xl:grid-cols-3'}>
+            {matchingOrganizations.map((login) => {
+              const count = tracked.filter((name) =>
+                name.split('/')[0].toLowerCase() === login.toLowerCase()).length
+              return <Link key={login.toLowerCase()} to="/org/$login" params={{ login }}
+                className="group flex min-w-0 items-center gap-3 border-b border-[var(--border)] px-5 py-4 text-[var(--fg)] no-underline transition-colors hover:bg-[var(--hover)]">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-2)] text-orange-500">
+                  <Building2 className="size-4"/>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium group-hover:text-orange-400">{login}</div>
+                  <p className="mt-0.5 text-xs text-[var(--muted)]">
+                    {t('workspacePinnedCount', { count })}
+                  </p>
+                </div>
+                <ArrowUpRight className="size-4 shrink-0 text-[var(--muted)]"/>
+              </Link>
+            })}
+          </div> : <p className="px-5 py-8 text-sm text-[var(--muted)]">
+            {organizations.length ? t('workspaceNoMatches') : t('noOrganizationsDetails')}
+          </p>}
+        </section>
+
+        {!hasTracked && <section className="flex items-start gap-3 rounded-xl border border-dashed border-[var(--border)] px-5 py-4">
+          <Star className="mt-0.5 size-4 shrink-0 text-orange-500"/>
+          <div>
+            <h2 className="text-sm font-medium">{t('workspaceNoTracked')}</h2>
+            <p className="mt-1 text-xs text-[var(--muted)]">{t('workspaceNoTrackedHint')}</p>
+          </div>
+        </section>}
+      </div>}
   </div>
 }
