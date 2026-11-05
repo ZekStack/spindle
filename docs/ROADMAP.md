@@ -254,6 +254,17 @@ state after a process restart.
 - [ ] **M3.2 — Clone and sync.** Clone, fetch and pull with streamed progress;
       default pull policy is fast-forward-only. Verify origin URL, branch
       and missing/upstream state before modification.
+      Engineering work: [x] clone into an explicitly saved workspace root with
+      destination collision prevention and automatic origin-verified linking;
+      [x] fetch and fast-forward-only pull from linked GitHub checkouts;
+      [x] main-process-only Git execution with streaming allowlisted progress,
+      bounded Activity jobs, cancellation and safe history;
+      [x] reject changed origins, detached HEAD, missing/mismatched upstream,
+      and dirty pull worktrees; [x] synthetic local Git remote regression tests.
+      **Remaining acceptance:** real private repository credentials via the
+      configured system Git client; native Windows/Linux clone, fetch and
+      pull QA, large clone cancellation and interrupted-directory recovery.
+      Do not mark this slice complete until these platform gates pass.
 - [ ] **M3.3 — Inspection.** Branch, commit, ahead/behind, dirty working
       tree, staged/untracked changes and local/remote tag inventory.
 - [ ] **M3.4 — Safety.** Refuse destructive operations when the worktree
