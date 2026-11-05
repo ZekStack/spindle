@@ -8,6 +8,7 @@ import { UpdateManager } from './updater'
 import { verifyRunningDebPackage } from './deb-preflight'
 import { registerIpc } from './ipc'
 import { parseGitHubUrl } from '../shared/contracts'
+import { isEligibleUpdate } from '../shared/update-policy'
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url))
 let window: BrowserWindow | null = null
@@ -51,10 +52,11 @@ function createWindow(): void {
     const installedDebSmoke = process.env.SPINDLE_SMOKE_INSTALLED_DEB === '1'
     const installedNsisSmoke = process.env.SPINDLE_SMOKE_INSTALLED_NSIS === '1'
     const appImageSmoke = process.env.SPINDLE_SMOKE_APPIMAGE === '1'
+    const liveDebSmoke = process.env.SPINDLE_SMOKE_LIVE_DEB_UPDATE === '1'
     const watchdog = setTimeout(() => {
       console.error('Spindle smoke test timed out')
       app.exit(1)
-    }, 20_000)
+    }, liveDebSmoke ? 300_000 : 20_000)
     mainWindow.webContents.once('did-finish-load', async () => {
       try {
         // Verifies that the sandboxed preload works and IPC reaches main.
@@ -97,17 +99,44 @@ function createWindow(): void {
             throw new Error('Running AppImage identity does not match the expected portable executable')
           }
         }
+        // Opt-in only: use the *actual* packaged updater and GitHub feed, not
+        // fake update events. Run from an installed older DEB on an ephemeral
+        // CI runner and stop at download verification; never elevate/install.
+        let liveDownload: { version: string; phase: string; percent: number | null } | null = null
+        if (liveDebSmoke) {
+          if (!installedDebSmoke || !updater || !app.isPackaged || process.platform !== 'linux') {
+            throw new Error('Live updater smoke requires an installed Linux DEB')
+          }
+          const checked: { phase: string; availableVersion: string | null } =
+            await mainWindow.webContents.executeJavaScript('window.spindle.checkForUpdates()')
+          const target = checked.availableVersion
+          if (checked.phase !== 'available' || !target ||
+              !isEligibleUpdate(app.getVersion(), target)) {
+            throw new Error('Live GitHub feed did not offer a newer eligible release')
+          }
+          const downloaded: {
+            phase: string; availableVersion: string | null; percent: number | null
+          } = await mainWindow.webContents.executeJavaScript('window.spindle.downloadUpdate()')
+          if (downloaded.phase !== 'ready' || downloaded.availableVersion !== target ||
+              downloaded.percent !== 100) {
+            throw new Error('Real Debian GitHub download did not finish with a verified DEB')
+          }
+          liveDownload = { version: target, phase: downloaded.phase, percent: downloaded.percent }
+        }
         // A Windows GUI executable may not have an attached stdout stream.
         // CI requires this proof, written only after all assertions succeed.
         const proof = process.env.SPINDLE_SMOKE_RESULT_FILE
         if (proof) {
           writeFileSync(proof, JSON.stringify({
-            version: result.version, installType: result.installType, phase: result.phase
+            version: result.version, installType: result.installType, phase: result.phase,
+            ...(liveDownload ? { liveDownload } : {})
           }), { flag: 'wx', mode: 0o600 })
         }
         clearTimeout(watchdog)
-        console.log(installedDebSmoke
-          ? 'Spindle installed Debian package ownership, updater and IPC smoke passed'
+        console.log(liveDebSmoke
+          ? `Spindle live GitHub Debian download passed: ${result.version} -> ${liveDownload?.version}`
+          : installedDebSmoke
+            ? 'Spindle installed Debian package ownership, updater and IPC smoke passed'
           : installedNsisSmoke
             ? 'Spindle installed Windows NSIS updater and IPC smoke passed'
             : appImageSmoke
