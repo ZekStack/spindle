@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import {
-  existsSync, mkdirSync, mkdtempSync, readFileSync,
+  existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
   rmSync, symlinkSync, writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -84,18 +84,18 @@ test('link and relink require matching actual Git origin and preserve associatio
     const store = new LocalWorkspaceStore(file)
     store.addRootFromPicker(dir)
     await store.linkFromPicker('ExampleOrg/project', nested)
-    assert.equal(store.pathFor('exampleorg/PROJECT'), resolve(first))
+    assert.equal(store.pathFor('exampleorg/PROJECT'), realpathSync(first))
     assert.deepEqual(store.load().repositories, [
-      { repository: 'ExampleOrg/project', path: resolve(first) }
+      { repository: 'ExampleOrg/project', path: realpathSync(first) }
     ])
     await assert.rejects(store.linkFromPicker('ExampleOrg/project', wrong), /origin/)
-    assert.equal(store.pathFor('ExampleOrg/project'), resolve(first))
+    assert.equal(store.pathFor('ExampleOrg/project'), realpathSync(first))
     await store.linkFromPicker('exampleorg/project', second)
-    assert.equal(store.pathFor('ExampleOrg/PROJECT'), resolve(second))
+    assert.equal(store.pathFor('ExampleOrg/PROJECT'), realpathSync(second))
     assert.deepEqual(new LocalWorkspaceStore(file).load().repositories,
-      [{ repository: 'ExampleOrg/project', path: resolve(second) }])
+      [{ repository: 'ExampleOrg/project', path: realpathSync(second) }])
     assert.deepEqual(store.removeRoot(resolve(dir)).roots, [])
-    assert.equal(store.pathFor('ExampleOrg/project'), resolve(second))
+    assert.equal(store.pathFor('ExampleOrg/project'), realpathSync(second))
     store.unlink('EXAMPLEORG/project')
     assert.deepEqual(store.load().repositories, [])
     assert.equal(existsSync(second), true)
@@ -128,8 +128,9 @@ test('corrupt workspace preferences are never overwritten and missing paths rema
     const checkoutDir = checkout(dir, 'checkout', 'https://github.com/ExampleOrg/project.git')
     const store = new LocalWorkspaceStore(file)
     await store.linkFromPicker('ExampleOrg/project', checkoutDir)
+    const canonical = realpathSync(checkoutDir)
     rmSync(checkoutDir, { recursive: true, force: true })
-    assert.equal(store.pathFor('ExampleOrg/project'), resolve(checkoutDir))
+    assert.equal(store.pathFor('ExampleOrg/project'), canonical)
     writeFileSync(file, '{invalid JSON')
     assert.throws(() => store.load())
     assert.throws(() => store.addRootFromPicker(dir))
