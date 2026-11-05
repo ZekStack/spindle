@@ -1,0 +1,90 @@
+name: Prepare RC
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'New release-candidate tag (for example v0.1.0-rc.9)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spindle-prepare-rc
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Verify green main, create RC tag and dispatch Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify new RC and exact green main commit
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo '::error::Prepare RC must be run from the main branch.'
+            exit 1
+          fi
+
+          git ls-remote --refs --tags origin |
+            awk '{ print substr($2, 11) }' > "$RUNNER_TEMP/spindle-existing-tags.txt"
+          node scripts/validate-next-rc.mjs "$RELEASE_TAG" "$RUNNER_TEMP/spindle-existing-tags.txt"
+
+          tagged_sha="$(git rev-parse HEAD)"
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ -z "$main_sha" || "$tagged_sha" != "$main_sha" ]]; then
+            echo "::error::The selected commit is no longer the head of main. Start a new run."
+            exit 1
+          fi
+
+          # A green PR is not enough: require a successful push-triggered CI
+          # run for the exact main commit that will be tagged.
+          ci_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            --method GET --field head_sha="$main_sha" --field branch=main --field per_page=20)"
+          if ! jq -e --arg sha "$main_sha" \
+            '([.workflow_runs[] | select(.head_sha == $sha and .event == "push")] | first | .conclusion) == "success"' \
+            <<<"$ci_runs" >/dev/null; then
+            echo "::error::The exact main commit does not have a successful main push CI run."
+            exit 1
+          fi
+          echo "Verified $RELEASE_TAG on green main $main_sha"
+
+      - name: Create immutable tag and explicitly launch Release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$(git rev-parse HEAD)" != "$main_sha" ]]; then
+            echo '::error::Main advanced after validation. Refusing to create a stale release tag.'
+            exit 1
+          fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            tag -a "$RELEASE_TAG" -m "Spindle $RELEASE_TAG"
+          git push origin "refs/tags/$RELEASE_TAG"
+
+          # GITHUB_TOKEN tag pushes do not create push-triggered Actions runs.
+          # workflow_dispatch is an explicit, supported exception.
+          if ! gh workflow run release.yml --ref "$RELEASE_TAG"; then
+            echo "::error::Tag $RELEASE_TAG exists, but Release dispatch failed. Run Release manually on that tag; never recreate or move it."
+            exit 1
+          fi
+          echo "Created immutable $RELEASE_TAG and dispatched Release on that tag"
