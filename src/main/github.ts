@@ -112,11 +112,11 @@ export class GitHubClient {
       return state('unavailable')
     }
   }
-  private async request<T>(path: string): Promise<T> {
-    return (await this.requestWithMeta<T>(path)).data
+  private async request<T>(path: string, signal?: AbortSignal): Promise<T> {
+    return (await this.requestWithMeta<T>(path, signal)).data
   }
 
-  private async requestWithMeta<T>(path: string): Promise<{ data: T; hasNext: boolean }> {
+  private async requestWithMeta<T>(path: string, signal?: AbortSignal): Promise<{ data: T; hasNext: boolean }> {
     const creds = await this.credentials.get()
     let response: Response
     try {
@@ -127,7 +127,7 @@ export class GitHubClient {
           'User-Agent': 'Spindle-Desktop',
           ...(creds.token ? { Authorization: `Bearer ${creds.token}` } : {})
         },
-        signal: AbortSignal.timeout(12_000)
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12_000)]) : AbortSignal.timeout(12_000)
       })
     } catch {
       // Never forward raw fetch errors: they may contain request details.
@@ -241,29 +241,29 @@ export class GitHubClient {
     }
   }
 
-  async repository(ownerValue: string, nameValue: string): Promise<Repository> {
+  async repository(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<Repository> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)
     return toRepository(await this.request<RemoteRepository>(
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`))
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`, signal))
   }
-  async releases(ownerValue: string, nameValue: string): Promise<Release[]> {
+  async releases(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<Release[]> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)
     const result = await this.request<Array<{
       id: number; tag_name: string; name: string | null; draft: boolean;
       prerelease: boolean; published_at: string | null; html_url: string
-    }>>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases?per_page=25`)
+    }>>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases?per_page=25`, signal)
     return result.map((r) => ({ id: r.id, tagName: r.tag_name, name: r.name,
       draft: r.draft, prerelease: r.prerelease, publishedAt: r.published_at, htmlUrl: r.html_url }))
   }
-  async workflowRuns(ownerValue: string, nameValue: string): Promise<WorkflowRun[]> {
+  async workflowRuns(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<WorkflowRun[]> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)
     const result = await this.request<{ workflow_runs: Array<{
       id: number; name: string; event: string; status: string; conclusion: string | null;
       head_branch: string; created_at: string; html_url: string
-    }> }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/runs?per_page=25`)
+    }> }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/runs?per_page=25`, signal)
     return result.workflow_runs.map((r) => ({ id: r.id, name: r.name, event: r.event,
       status: r.status, conclusion: r.conclusion, headBranch: r.head_branch,
       createdAt: r.created_at, htmlUrl: r.html_url }))
