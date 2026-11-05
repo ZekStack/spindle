@@ -189,16 +189,26 @@ Read-only browsing works without a token for public repositories.
 **Goal:** operations must continue when dialogs close and communicate their
 real status rather than showing a spinner indefinitely.
 
-- [ ] **M2.1 — Typed operation model.** Define job ID, kind, repository,
-      requested action, timestamps, phase, progress, output and structured
-      error codes. Renderer talks to narrowly scoped preload IPC methods.
-- [ ] **M2.2 — Execution lifecycle.** Main-process scheduler with
-      concurrency limits, one mutating job per repository, cancellation,
-      timeouts, stream output, and safe child-process cleanup.
-- [ ] **M2.3 — Durable Activity dialog.** Header-triggered shadcn dialog
-      with running/history filters, job detail, live output, and reopen
-      behavior. Persist a compact history and mark interrupted jobs
-      accurately after application restart.
+- [x] **M2.1 — Typed operation model.** Defined validated job IDs,
+      repository, action/kind, start/end times, queued/running/terminal phases,
+      progress, bounded output and structured safe error codes. The typed
+      preload IPC exposes only job list, repository inspection and cancel,
+      plus live updates. The first real operation inspects repository
+      metadata, releases and workflow runs from Electron main.
+- [ ] **M2.2 — Execution lifecycle.** Initial main-process queue
+      supports two concurrent read-only repository inspections, bounded
+      queue size, per-repository deduplication, cancellation via AbortSignal,
+      45-second deadlines and live progress. **Remaining:** child-process
+      execution/cleanup, streamed Git output and strict mutating-operation
+      serialization when local Git operations arrive in M3.
+- [ ] **M2.3 — Durable Activity dialog.** Implemented header-triggered
+      Radix/shadcn Activity with running/history filters, job details,
+      safe output, cancellation/retry and real-time event updates. The
+      main-process history persists the latest 100 operations in an atomic
+      user-data file, detects corrupted history without overwriting it,
+      and marks previously running jobs interrupted after restart.
+      **Remaining acceptance:** manual Linux/Windows inspection, dialog
+      close/reopen, cancellation and restart QA on installed builds.
 - [ ] **M2.4 — Reliability and security.** Explicit retryability and
       partial-completion states, sanitized logs, no shell interpolation,
       and deterministic tests for cancel/restart/timeout failures.

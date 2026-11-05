@@ -1,9 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SpindleApi } from '../shared/contracts'
 import type { UpdateStatus } from '../shared/update-policy'
+import type { JobRecord } from '../shared/jobs'
 
 // Deliberately expose only fixed operations with typed arguments.
 const api: SpindleApi = {
+  listJobs: () => ipcRenderer.invoke('spindle:jobs:list'),
+  inspectRepository: (owner, name) => ipcRenderer.invoke('spindle:jobs:inspect', owner, name),
+  cancelJob: (id) => ipcRenderer.invoke('spindle:jobs:cancel', id),
+  onJobsChanged: (listener: (jobs: JobRecord[]) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, items: JobRecord[]) => listener(items)
+    ipcRenderer.on('spindle:jobs:changed', handler)
+    return () => ipcRenderer.removeListener('spindle:jobs:changed', handler)
+  },
   getWorkspace: () => ipcRenderer.invoke('spindle:workspace:get'),
   addOrganization: (login) => ipcRenderer.invoke('spindle:workspace:add-org', login),
   removeOrganization: (login) => ipcRenderer.invoke('spindle:workspace:remove-org', login),

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GitHubClient } from './github'
 import { WorkspaceStore } from './store'
+import { JobManager } from './jobs'
 import { UpdateManager } from './updater'
 import { verifyRunningDebPackage } from './deb-preflight'
 import { registerIpc } from './ipc'
@@ -13,6 +14,7 @@ import { isEligibleUpdate } from '../shared/update-policy'
 const ROOT = fileURLToPath(new URL('.', import.meta.url))
 let window: BrowserWindow | null = null
 let updater: UpdateManager | null = null
+let jobs: JobManager | null = null
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -33,9 +35,11 @@ function createWindow(): void {
   })
   window = mainWindow
   updater ??= new UpdateManager()
+  const github = new GitHubClient()
+  jobs ??= new JobManager(join(app.getPath('userData'), 'activity-history.json'), github)
   registerIpc(mainWindow,
     new WorkspaceStore(join(app.getPath('userData'), 'workspace.json')),
-    new GitHubClient(), updater)
+    github, updater, jobs)
   mainWindow.once('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try { void shell.openExternal(parseGitHubUrl(url)) } catch { /* Reject external URLs */ }

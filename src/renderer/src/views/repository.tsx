@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, GitBranch, LockKeyhole, Tag, Workflow, GitCommitHorizontal, RefreshCw, Star } from 'lucide-react'
+import { ChevronLeft, GitBranch, LockKeyhole, Tag, Workflow, GitCommitHorizontal, RefreshCw, Star, Activity } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { repositoryRoute } from '../router'
 import { Button } from '../components/ui/button'
@@ -13,6 +13,17 @@ export function RepositoryPage() {
   const { owner, name } = repositoryRoute.useParams()
   const { t, i18n } = useTranslation()
   const [tab, setTab] = useState<Tab>('overview')
+  const [inspectionError, setInspectionError] = useState(false)
+  const [inspecting, setInspecting] = useState(false)
+  async function inspectRepository() {
+    setInspecting(true)
+    setInspectionError(false)
+    try {
+      await window.spindle.inspectRepository(owner, name)
+      window.dispatchEvent(new Event('spindle:activity:open'))
+    } catch { setInspectionError(true) }
+    finally { setInspecting(false) }
+  }
   const cache = useQueryClient()
   const workspace = useQuery({ queryKey: ['workspace'], queryFn: () => window.spindle.getWorkspace() })
   const tracked = workspace.data?.trackedRepositories.some((entry) =>
@@ -62,6 +73,13 @@ export function RepositoryPage() {
           <Star className={`size-3.5 ${tracked ? 'fill-orange-500 text-orange-500' : ''}`}/>
           {tracked ? t('untrack') : t('track')}
         </Button>
+        <Button variant="secondary" size="sm" disabled={inspecting}
+          onClick={() => void inspectRepository()}>
+          <Activity className="size-3.5"/>{t('activityInspect')}
+        </Button>
+        {inspectionError && <span role="alert" className="self-center text-xs text-red-400">
+          {t('activityFailed')}
+        </span>}
         {repository.data && <ExternalGitHub url={repository.data.htmlUrl}/>}
         <Button variant="secondary" size="sm" onClick={() => {
           void repository.refetch()
