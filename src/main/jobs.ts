@@ -34,7 +34,7 @@ function validHistory(raw: unknown): raw is JobRecord[] {
         job.location.length > 0 && job.location.length <= 2048 &&
         isAbsolute(job.location) && !job.location.includes('\0'))) &&
     job.action === 'inspect' &&
-    ['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
+    ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
     typeof job.requestedAt === 'string' && job.requestedAt.length <= 40 &&
     (job.startedAt === null || typeof job.startedAt === 'string') &&
     (job.finishedAt === null || typeof job.finishedAt === 'string') &&
@@ -42,7 +42,9 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     Array.isArray(job.output) && job.output.length <= 24 &&
     job.output.every((line: unknown) => typeof line === 'string' && line.length <= 160) &&
     (job.errorCode === null || ['auth', 'forbidden', 'not-found', 'rate-limit',
-      'network', 'timeout', 'interrupted', 'unknown'].includes(job.errorCode)))
+      'network', 'timeout', 'interrupted', 'git-unavailable', 'git-failed',
+      'output-limit', 'unknown'].includes(job.errorCode)) &&
+    (job.retryable === undefined || typeof job.retryable === 'boolean'))
 }
 
 /**
@@ -71,6 +73,7 @@ export class JobManager {
         job.phase = 'interrupted'
         job.finishedAt = new Date().toISOString()
         job.errorCode = 'interrupted'
+        job.retryable = true
         job.output.push('Interrupted by application restart.')
         changed = true
       }
@@ -105,7 +108,8 @@ export class JobManager {
     const record: JobRecord = {
       id: randomUUID(), kind: 'repository-inspection', repository, action: 'inspect',
       requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
-      phase: 'queued', progress: 0, output: ['Repository inspection queued.'], errorCode: null
+      phase: 'queued', progress: 0, output: ['Repository inspection queued.'], errorCode: null,
+      retryable: false
     }
     this.history.unshift(record)
     this.history = this.history.slice(0, MAX_HISTORY)
@@ -134,7 +138,8 @@ export class JobManager {
       id: randomUUID(), kind: 'local-git-inspection', repository: label,
       location, action: 'inspect',
       requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
-      phase: 'queued', progress: 0, output: ['Local Git inspection queued.'], errorCode: null
+      phase: 'queued', progress: 0, output: ['Local Git inspection queued.'], errorCode: null,
+      retryable: false
     }
     this.history.unshift(record)
     this.history = this.history.slice(0, MAX_HISTORY)
@@ -214,16 +219,28 @@ export class JobManager {
       }
     } catch (error) {
       if (!activeJob(job.phase)) return
-      const missingGit = error instanceof GitProcessError && error.reason === 'unavailable'
-      this.finish(job, 'failed', timedOut ? 'timeout' : missingGit ? 'not-found' : codeFor(error),
+      const gitFailure = error instanceof GitProcessError
+        ? error.reason === 'unavailable' ? 'git-unavailable'
+          : error.reason === 'output-limit' ? 'output-limit' : 'git-failed'
+        : null
+      const code = timedOut ? 'timeout' : gitFailure ?? codeFor(error)
+      // Progress can reflect useful completed steps even when a subsequent
+      // GitHub or local Git request fails; never report false full success.
+      const hasPartialResult = job.kind === 'repository-inspection'
+        ? job.progress >= 33 : job.progress >= 60
+      this.finish(job, hasPartialResult ? 'partial' : 'failed', code,
         timedOut ? 'Operation timed out.'
-          : missingGit ? 'Git executable was not found.'
-            : job.kind === 'local-git-inspection' ? 'Local Git inspection failed. Select a valid Git worktree.'
-              : 'Repository inspection failed.')
+          : code === 'git-unavailable' ? 'Git executable was not found.'
+            : code === 'output-limit' ? 'Git output exceeded the safe limit.'
+              : job.kind === 'local-git-inspection'
+                ? 'Local Git inspection could not finish.'
+                : 'Repository inspection could not finish.')
     } finally {
       clearTimeout(watchdog)
-      if (timedOut && job.phase === 'running') {
-        this.finish(job, 'failed', 'timeout', 'Operation timed out.')
+      if (timedOut && activeJob(job.phase)) {
+        const partial = job.kind === 'repository-inspection'
+          ? job.progress >= 33 : job.progress >= 60
+        this.finish(job, partial ? 'partial' : 'failed', 'timeout', 'Operation timed out.')
       }
       this.controllers.delete(job.id)
       this.schedule()
@@ -277,11 +294,14 @@ export class JobManager {
     job.output = job.output.slice(-24)
     this.publish()
   }
-  private finish(job: JobRecord, phase: 'completed' | 'failed' | 'cancelled',
+  private finish(job: JobRecord, phase: 'completed' | 'partial' | 'failed' | 'cancelled',
     errorCode: JobErrorCode | null, message: string): void {
     if (!activeJob(job.phase)) return
     job.phase = phase
     job.errorCode = errorCode
+    job.retryable = phase === 'cancelled' || errorCode === 'rate-limit' ||
+      errorCode === 'network' || errorCode === 'timeout' ||
+      errorCode === 'interrupted' || errorCode === 'unknown'
     job.finishedAt = new Date().toISOString()
     job.output.push(message)
     job.output = job.output.slice(-24)

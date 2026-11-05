@@ -1,8 +1,8 @@
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection'
-export type JobPhase = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
 export type JobErrorCode = 'auth' | 'forbidden' | 'not-found' | 'rate-limit' | 'network' |
-  'timeout' | 'interrupted' | 'unknown'
+  'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' | 'unknown'
 
 export interface JobRecord {
   id: string
@@ -18,6 +18,8 @@ export interface JobRecord {
   progress: number
   output: string[]
   errorCode: JobErrorCode | null
+  /** True when the same operation is likely to work without changing access or configuration. */
+  retryable?: boolean
 }
 
 export const activeJob = (phase: JobPhase): boolean =>
