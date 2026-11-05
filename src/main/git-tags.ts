@@ -106,7 +106,7 @@ export async function listGitTags(
   }))
   return {
     head, branch: branch.trim() || null,
-    localTotal: local.size, originTotal: origin.size,
+    localTotal: local.size, originTotal: origin.size, total: names.length,
     originState, originError, entries
   }
 }
