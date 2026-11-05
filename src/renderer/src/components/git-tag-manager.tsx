@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { validateTagName, type GitTagEntry, type TagAction, type TagMode, type TagMutationRequest } from '../../../shared/tags'
 import { Button } from './ui/button'
@@ -141,7 +141,7 @@ export function GitTagManager({ owner, name, path }: { owner: string; name: stri
               </Button>}
           </div>)}
         </div>}
-      {query.data.localTotal + (remoteAvailable ? query.data.originTotal : 0) > query.data.entries.length &&
+      {query.data.total > query.data.entries.length &&
         <p className="mt-2 text-xs text-[var(--muted)]">{t('tagsTruncated')}</p>}
       {!query.data.head &&
         <p className="mt-2 text-xs text-[var(--muted)]">{t('tagsNoCommit')}</p>}
@@ -216,7 +216,7 @@ export function GitTagManager({ owner, name, path }: { owner: string; name: stri
               : selected.action === 'delete-origin' ? 'tagsOriginWarning'
                 : selected.action === 'delete-local' ? 'tagsLocalWarning' : 'tagsPushWarning')}
           </p>
-          {selectedEntry === undefined && <p className="mt-2 text-xs text-amber-400">
+          {!selectedEntry && <p className="mt-2 text-xs text-amber-400">
             {t('tagsChangedSincePreview')}
           </p>}
         </>}
