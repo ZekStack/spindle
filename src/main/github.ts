@@ -5,7 +5,7 @@ import {
   LOGIN_PATTERN, validateLogin, validatePage, validateRepository, validateRepositorySearch,
   validateOrganizationSearch,
   type AuthStatus, type GitHubIdentity, type Organization, type OrganizationSuggestion,
-  type Release, type Repository, type WorkflowRun
+  type PageResult, type Release, type Repository, type WorkflowRun
 } from '../shared/contracts'
 
 const execFileAsync = promisify(execFile)
@@ -113,25 +113,52 @@ export class GitHubClient {
     }
   }
   private async request<T>(path: string): Promise<T> {
+    return (await this.requestWithMeta<T>(path)).data
+  }
+
+  private async requestWithMeta<T>(path: string): Promise<{ data: T; hasNext: boolean }> {
     const creds = await this.credentials.get()
-    const response = await this.requestFn(BASE + path, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'Spindle-Desktop',
-        ...(creds.token ? { Authorization: `Bearer ${creds.token}` } : {})
-      },
-      signal: AbortSignal.timeout(12_000)
-    })
+    let response: Response
+    try {
+      response = await this.requestFn(BASE + path, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Spindle-Desktop',
+          ...(creds.token ? { Authorization: `Bearer ${creds.token}` } : {})
+        },
+        signal: AbortSignal.timeout(12_000)
+      })
+    } catch {
+      // Never forward raw fetch errors: they may contain request details.
+      throw new Error('GitHub connection failed. Check your network and retry.')
+    }
     if (!response.ok) {
+      const limited = response.status === 429 ||
+        (response.status === 403 &&
+          (response.headers.get('x-ratelimit-remaining') === '0' ||
+           response.headers.has('retry-after')))
+      if (limited) {
+        const seconds = Number(response.headers.get('retry-after'))
+        const wait = Number.isInteger(seconds) && seconds > 0 && seconds <= 3600
+          ? ` Retry after ${seconds} seconds.` : ''
+        throw new Error(`GitHub API rate limit reached.${wait} Try again later.`)
+      }
+      if (response.status === 401) throw new Error(
+        'GitHub authentication expired or is invalid. Switch or reconnect your account.')
+      if (response.status === 403) throw new Error(
+        'GitHub denied this account access. Check repository permissions or switch accounts.')
       if (response.status === 404) throw new Error(
-        'Not found or inaccessible on GitHub. Check the name and your GitHub credentials.')
-      if (response.status === 401) throw new Error('GitHub authentication failed. Sign in using gh auth login.')
-      if (response.status === 403) throw new Error('GitHub access denied or rate limited. Check permissions and API limits.')
+        'GitHub resource not found or inaccessible to the selected account.')
+      if (response.status >= 500) throw new Error(
+        'GitHub service is temporarily unavailable. Retry shortly.')
       throw new Error(`GitHub request failed (HTTP ${response.status})`)
     }
-    return response.json() as Promise<T>
+    const link = response.headers.get('link') || ''
+    const hasNext = link.split(',').some((part) => /rel="next"/.test(part))
+    return { data: await response.json() as T, hasNext }
   }
+
   async organization(value: string): Promise<Organization> {
     const login = validateLogin(value)
     const org = await this.request<{
@@ -141,35 +168,77 @@ export class GitHubClient {
     return { login: org.login, name: org.name, avatarUrl: org.avatar_url,
       description: org.description, htmlUrl: org.html_url, publicRepos: org.public_repos }
   }
-  async searchOrganizations(queryValue: string, pageValue: number): Promise<OrganizationSuggestion[]> {
+  async listAccessibleOrganizations(pageValue: number): Promise<PageResult<OrganizationSuggestion>> {
+    const page = validatePage(pageValue)
+    if (!(await this.credentials.get()).token) {
+      throw new Error('Sign in to GitHub to discover your organizations.')
+    }
+    const { data, hasNext } = await this.requestWithMeta<
+      Array<{ login: string; avatar_url: string | null }>
+    >(`/user/orgs?per_page=100&page=${page}`)
+    return {
+      items: data.filter((org) => typeof org.login === 'string' &&
+        LOGIN_PATTERN.test(org.login))
+        .map((org) => ({ login: org.login, avatarUrl: org.avatar_url })),
+      hasNext
+    }
+  }
+
+  async searchOrganizations(queryValue: string, pageValue: number): Promise<PageResult<OrganizationSuggestion>> {
     const query = validateOrganizationSearch(queryValue)
     const page = validatePage(pageValue)
     const q = encodeURIComponent(`${query} in:login type:org`)
-    const response = await this.request<{ items: Array<{ login: string; avatar_url: string | null }> }>(
-      `/search/users?q=${q}&per_page=20&page=${page}`
-    )
-    return response.items.filter((item) => LOGIN_PATTERN.test(item.login))
-      .map((item) => ({ login: item.login, avatarUrl: item.avatar_url }))
+    const { data, hasNext } = await this.requestWithMeta<{
+      total_count?: number
+      items: Array<{ login: string; avatar_url: string | null }>
+    }>(`/search/users?q=${q}&per_page=20&page=${page}`)
+    return {
+      items: data.items.filter((item) => typeof item.login === 'string' &&
+        LOGIN_PATTERN.test(item.login))
+        .map((item) => ({ login: item.login, avatarUrl: item.avatar_url })),
+      hasNext: searchHasNext(hasNext, data.total_count, page, 20),
+      totalCount: data.total_count
+    }
   }
 
-  async repositories(value: string, pageValue: number): Promise<Repository[]> {
+  async repositories(value: string, pageValue: number): Promise<PageResult<Repository>> {
     const org = validateLogin(value)
     const page = validatePage(pageValue)
-    const result = await this.request<Array<{
-      id: number; full_name: string; name: string; description: string | null;
-      private: boolean; archived: boolean; default_branch: string;
-      updated_at: string; html_url: string
-    }>>(`/orgs/${encodeURIComponent(org)}/repos?per_page=100&page=${page}&sort=full_name&direction=asc&type=all`)
-    return result.map(toRepository)
+    const { data, hasNext } = await this.requestWithMeta<RemoteRepository[]>(
+      `/orgs/${encodeURIComponent(org)}/repos?per_page=100&page=${page}&sort=full_name&direction=asc&type=all`
+    )
+    return { items: data.map(toRepository), hasNext }
   }
-  async searchRepositories(queryValue: string, pageValue: number): Promise<Repository[]> {
+
+  async searchOrganizationRepositories(
+    value: string, queryValue: string, pageValue: number
+  ): Promise<PageResult<Repository>> {
+    const org = validateLogin(value)
+    const query = validateRepositorySearch(queryValue)
+    const page = validatePage(pageValue)
+    const search = encodeURIComponent(`${query} in:name org:${org}`)
+    const { data, hasNext } = await this.requestWithMeta<{
+      total_count?: number; items: RemoteRepository[]
+    }>(`/search/repositories?q=${search}&per_page=20&page=${page}`)
+    return {
+      items: data.items.map(toRepository),
+      hasNext: searchHasNext(hasNext, data.total_count, page, 20),
+      totalCount: data.total_count
+    }
+  }
+
+  async searchRepositories(queryValue: string, pageValue: number): Promise<PageResult<Repository>> {
     const query = validateRepositorySearch(queryValue)
     const page = validatePage(pageValue)
     const search = encodeURIComponent(`${query} in:name`)
-    const response = await this.request<{ items: RemoteRepository[] }>(
-      `/search/repositories?q=${search}&per_page=20&page=${page}`
-    )
-    return response.items.map(toRepository)
+    const { data, hasNext } = await this.requestWithMeta<{
+      total_count?: number; items: RemoteRepository[]
+    }>(`/search/repositories?q=${search}&per_page=20&page=${page}`)
+    return {
+      items: data.items.map(toRepository),
+      hasNext: searchHasNext(hasNext, data.total_count, page, 20),
+      totalCount: data.total_count
+    }
   }
 
   async repository(ownerValue: string, nameValue: string): Promise<Repository> {
@@ -209,4 +278,12 @@ function toRepository(r: RemoteRepository): Repository {
   return { id: r.id, fullName: r.full_name, name: r.name, description: r.description,
     private: r.private, archived: r.archived, defaultBranch: r.default_branch,
     updatedAt: r.updated_at, htmlUrl: r.html_url }
+}
+
+/** GitHub Search results cap navigation at 1,000 entries. */
+function searchHasNext(linkHasNext: boolean, count: number | undefined, page: number, size: number): boolean {
+  if (page * size >= 1000) return false
+  if (linkHasNext) return true
+  return typeof count === 'number' && Number.isSafeInteger(count) &&
+    page * size < Math.min(count, 1000)
 }
