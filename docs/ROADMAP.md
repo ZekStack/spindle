@@ -320,6 +320,27 @@ Release, and CI-generated release workflow.
       push a selected tag, show remote state, and delete **local and origin
       independently**, including a clear combined operation. Confirm remote
       deletion and never move published tags implicitly.
+      Engineering work: [x] safe ASCII tag-name and typed mutation validation;
+      [x] local lightweight/annotated tags at explicitly confirmed HEAD SHA;
+      [x] Git-verified local/origin inventories with independent presence,
+      tag object SHA, a bounded 80-tag view and explicit unavailable remote
+      state; [x] creation and non-forced origin push refuse existing tags;
+      [x] local deletion uses an expected old ref SHA, while origin deletion
+      uses live verification plus Git force-with-lease compare-and-delete;
+      [x] origin-only, local-only and origin-first combined deletion have
+      separate explicit UI confirmations with exact reference OIDs and a
+      warning that GitHub Releases are not deleted; [x] serialized cancellable
+      Activity jobs persist bounded results, annotate combined partial success,
+      and never persist user annotation messages or raw Git error output;
+      [x] English/Hungarian UI with refresh and actionable failure states;
+      [x] real synthetic Git tests for local/remote separation, changed refs,
+      remote publish, combined partial failure and sanitization.
+      **Remaining acceptance:** installed Linux Mint/Windows UI confirmation
+      and keyboard checks, real public/private origin permissions, tag
+      publication triggering workflows, offline remote handling and tag
+      deletion recovery. Do not mark M4.1 complete until these runtime
+      gates pass. The application never automatically moves a published
+      tag or deletes a GitHub Release when deleting a Git ref.
 - [ ] **M4.2 — Release lifecycle.** Create draft releases from an existing
       tag, edit notes, publish/prerelease, upload assets, and remove a
       Release separately from its tag. Show exact commit SHA and status.
