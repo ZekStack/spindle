@@ -61,7 +61,7 @@ export function HomePage() {
           {matchingTracked.length ? <div>
             {matchingTracked.map((fullName) =>
               <TrackedRepositoryRow key={fullName.toLocaleLowerCase()} fullName={fullName}/>
-            )
+            )}
           </div> : <p className="px-5 py-8 text-sm text-[var(--muted)]">{t('workspaceNoMatches')}</p>}
         </section>}
 
