@@ -70,9 +70,9 @@ function createWindow(): void {
         // and the real, system-installed Debian package. The packaged case
         // also exercises the updater's actual package-type marker.
         const result: {
-          workspace: boolean; phase: string; installType: string; version: string
+          workspace: boolean; localWorkspace: boolean; phase: string; installType: string; version: string
         } | null = await mainWindow.webContents.executeJavaScript(
-          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function') return null; const state = await api.getWorkspace(); const update = await api.getUpdateStatus(); return { workspace: Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories), phase: update.phase, installType: update.installType, version: update.currentVersion }; })()"
+          "(async () => { const api = window.spindle; if (!api || typeof api.getWorkspace !== 'function' || typeof api.getLocalWorkspaces !== 'function') return null; const state = await api.getWorkspace(); const local = await api.getLocalWorkspaces(); const update = await api.getUpdateStatus(); return { workspace: Array.isArray(state.organizations) && Array.isArray(state.trackedRepositories), localWorkspace: Array.isArray(local.roots) && Array.isArray(local.repositories), phase: update.phase, installType: update.installType, version: update.currentVersion }; })()"
         )
         if (Number(installedDebSmoke) + Number(installedNsisSmoke) + Number(appImageSmoke) > 1) {
           throw new Error('Conflicting native smoke modes')
@@ -80,7 +80,7 @@ function createWindow(): void {
         const expectedPhase = installedDebSmoke || installedNsisSmoke || appImageSmoke ? 'idle' : 'disabled'
         const expectedInstaller = installedDebSmoke ? 'deb'
           : installedNsisSmoke ? 'nsis' : appImageSmoke ? 'appimage' : 'unknown'
-        if (!result?.workspace || result.phase !== expectedPhase ||
+        if (!result?.workspace || !result.localWorkspace || result.phase !== expectedPhase ||
             result.installType !== expectedInstaller || result.version !== app.getVersion()) {
           throw new Error('Preload, IPC or package detection smoke test failed')
         }
