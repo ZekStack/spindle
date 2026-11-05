@@ -82,6 +82,8 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     jobs.clone(owner, name, root))
   handle('spindle:local:sync', (owner: string, name: string, operation: 'fetch' | 'pull') =>
     jobs.sync(owner, name, operation))
+  handle('spindle:local:pull-preview', (owner: string, name: string) =>
+    jobs.previewPull(owner, name))
   handle('spindle:workspace:get', () => store.load())
   handle('spindle:workspace:add-org', async (login: string) => {
     const org = await github.organization(validateLogin(login))
