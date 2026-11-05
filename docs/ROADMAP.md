@@ -130,10 +130,18 @@ version pairs, OS, installer type, and outcome in the PR/release notes.
 **Goal:** a new user can configure Spindle without cloning our repositories
 or editing a shell script.
 
-- [ ] **M1.1 — Identity.** Show current account, permissions and authentication
-      failures. Keep existing GitHub CLI auth working; design optional
-      first-party GitHub OAuth device-flow sign-in with a configurable
-      application client ID (no bundled secrets) and logout.
+**Product feature implementation is now proceeding at user request while
+M0's real installed-update acceptance remains open.** This does not close
+M0 release gates or certify the updater for public production deployment.
+
+- [x] **M1.1 — Identity.** The header now opens an account dialog with
+      live GitHub viewer information, credential source, reported OAuth
+      scopes and distinct invalid/forbidden/rate-limited/offline states.
+      Explicit refresh detects updated GitHub CLI credentials without
+      changing shared machine-wide tokens. First-party device-flow sign-in,
+      configurable client ID and isolated sign-out are designed in
+      `docs/AUTHENTICATION.md`, **not implemented** until secure credential
+      storage in M1.2. Scopes are not represented as repository permissions.
 - [ ] **M1.2 — Credential security.** Store app-managed credentials using
       supported OS facilities; handle token expiration, revocation and
       permission scopes. Never expose tokens via renderer IPC, logs or Git.
@@ -308,5 +316,6 @@ Linux Mint/Windows machines. After recording the installed versions, publish
 `v0.1.0-rc.10` from green main and test the real in-application RC-to-RC
 download, authorization, failure/cancellation and restart on Linux Mint DEB,
 AppImage and Windows NSIS. The manual workflow automates safe tag creation
-and release dispatch, **not** OS-level QA. No native two-release upgrade is
-yet verified. Do not begin M1 before the M0 installation gates pass.
+and release dispatch, **not** OS-level QA. No native two-release upgrade is yet verified. M1 product development
+has started at user direction; **M0 release acceptance is still required**
+before declaring the distribution ready.

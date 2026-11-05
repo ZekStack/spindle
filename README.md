@@ -82,11 +82,18 @@ IPC bridge. GitHub requests use a fixed API origin, and external links are
 restricted to `https://github.com`. Local preferences are stored in the
 OS application data directory, not committed to the repository.
 
-**Authentication:** R1 reads the existing GitHub CLI token when available,
-falling back to environment credentials or anonymous public access.
-A dedicated GitHub OAuth device-flow onboarding experience and native
-secure token storage are planned for R2. Do not distribute PATs or package
-credentials with the application.
+**Authentication:** Spindle uses `GH_TOKEN` / `GITHUB_TOKEN` when
+available, otherwise existing GitHub CLI credentials, then anonymous
+public access. The new account button in the header shows the currently
+authenticated GitHub user, credential source, reported OAuth scopes and
+credential failures. Use **Refresh account** after changing GitHub CLI
+authentication outside Spindle. Scopes do not prove per-repository access.
+
+Spindle deliberately does not log out of a shared GitHub CLI session or
+modify environment tokens. Optional in-app OAuth device-flow sign-in and
+isolated logout are designed in [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)
+but require the M1.2 secure credential storage work; they are not yet
+available. Do not distribute PATs or package credentials with the app.
 
 ## Roadmap
 

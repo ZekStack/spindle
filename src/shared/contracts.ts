@@ -46,6 +46,20 @@ export interface WorkflowRun {
 export interface AuthStatus {
   method: 'github-cli' | 'environment' | 'anonymous'
 }
+
+/** Safe account information: credentials and raw API responses stay in main. */
+export interface GitHubIdentity {
+  method: AuthStatus['method']
+  state: 'authenticated' | 'anonymous' | 'invalid' | 'rate-limited' | 'forbidden' | 'unavailable'
+  account: {
+    login: string
+    name: string | null
+    avatarUrl: string | null
+    htmlUrl: string
+  } | null
+  /** OAuth scopes, when reported by GitHub; null for unreported/fine-grained permissions. */
+  scopes: string[] | null
+}
 export interface SpindleApi {
   getWorkspace(): Promise<Workspace>
   addOrganization(login: string): Promise<Workspace>
@@ -57,6 +71,7 @@ export interface SpindleApi {
   listReleases(owner: string, name: string): Promise<Release[]>
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
   getAuthStatus(): Promise<AuthStatus>
+  getGitHubIdentity(refresh?: boolean): Promise<GitHubIdentity>
   openGitHub(url: string): Promise<void>
   getUpdateStatus(): Promise<UpdateStatus>
   checkForUpdates(): Promise<UpdateStatus>

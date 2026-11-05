@@ -59,3 +59,70 @@ test('distinguishes inaccessible GitHub resources and does not expose credential
   assert.equal(seen[0].auth, undefined)
   assert.deepEqual(await client.authStatus(), { method: 'anonymous' })
 })
+
+test('current identity resolves GitHub viewer and reported OAuth scopes without exposing tokens', async () => {
+  const calls: string[] = []
+  const token = 'ghp_SUPERSECRET'
+  const fetcher = (async (_url: string | URL | Request, options?: RequestInit) => {
+    calls.push(new Headers(options?.headers).get('Authorization') || '')
+    return Response.json({
+      login: 'ExampleUser', name: 'Example User',
+      avatar_url: 'https://avatars.githubusercontent.com/u/7?v=4',
+      html_url: 'https://github.com/ExampleUser'
+    }, { headers: { 'x-oauth-scopes': 'repo, read:org' } })
+  }) as typeof fetch
+  const client = new GitHubClient(fetcher, {
+    get: async () => ({ method: 'environment' as const, token })
+  })
+  assert.deepEqual(await client.identity(), {
+    method: 'environment', state: 'authenticated',
+    account: {
+      login: 'ExampleUser', name: 'Example User',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/7?v=4',
+      htmlUrl: 'https://github.com/ExampleUser'
+    },
+    scopes: ['repo', 'read:org']
+  })
+  assert.equal(calls[0], 'Bearer ' + token)
+  assert.equal(JSON.stringify(await client.identity()).includes(token), false)
+})
+
+test('identity distinguishes anonymous, invalid, forbidden and rate-limited credentials', async () => {
+  const noCredentials = mockGithub({}, false)
+  assert.deepEqual(await noCredentials.client.identity(), {
+    method: 'anonymous', state: 'anonymous', account: null, scopes: null
+  })
+  assert.equal(noCredentials.seen.length, 0)
+  for (const [code, remaining, expected] of [
+    [401, '42', 'invalid'],
+    [403, '0', 'rate-limited'],
+    [403, '42', 'forbidden'],
+    [500, '42', 'unavailable']
+  ] as const) {
+    const client = new GitHubClient(
+      (async () => new Response('{}', {
+        status: code, headers: { 'x-ratelimit-remaining': remaining }
+      })) as typeof fetch,
+      { get: async () => ({ method: 'environment' as const, token: 'SECRET' }) }
+    )
+    const result = await client.identity()
+    assert.equal(result.state, expected)
+    assert.equal(result.account, null)
+    assert.equal(JSON.stringify(result).includes('SECRET'), false)
+  }
+})
+
+test('identity refresh clears cached CLI credentials without changing global login', async () => {
+  let invalidations = 0
+  const client = new GitHubClient(
+    (async () => Response.json({ login: 'new-user', name: null })) as typeof fetch,
+    {
+      get: async () => ({ method: 'github-cli' as const, token: 'hidden' }),
+      invalidate: () => { invalidations++ }
+    }
+  )
+  assert.equal((await client.identity()).state, 'authenticated')
+  assert.equal(invalidations, 0)
+  assert.equal((await client.identity(true)).account?.login, 'new-user')
+  assert.equal(invalidations, 1)
+})

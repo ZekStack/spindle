@@ -50,6 +50,7 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:github:releases', (owner: string, name: string) => github.releases(owner, name))
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
   handle('spindle:auth:status', () => github.authStatus())
+  handle('spindle:auth:identity', (refresh: boolean = false) => github.identity(refresh === true))
   handle('spindle:github:open', async (url: string) => { await shell.openExternal(parseGitHubUrl(url)) })
   handle('spindle:update:state', () => updates.snapshot())
   handle('spindle:update:check', () => updates.check(true))
