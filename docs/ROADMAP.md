@@ -195,12 +195,19 @@ real status rather than showing a spinner indefinitely.
       preload IPC exposes only job list, repository inspection and cancel,
       plus live updates. The first real operation inspects repository
       metadata, releases and workflow runs from Electron main.
-- [ ] **M2.2 — Execution lifecycle.** Initial main-process queue
-      supports two concurrent read-only repository inspections, bounded
-      queue size, per-repository deduplication, cancellation via AbortSignal,
-      45-second deadlines and live progress. **Remaining:** child-process
-      execution/cleanup, streamed Git output and strict mutating-operation
-      serialization when local Git operations arrive in M3.
+- [ ] **M2.2 — Execution lifecycle.** The main-process queue supports two
+      concurrent read-only repository inspections, bounded queue size,
+      per-repository deduplication, cancellation via AbortSignal, 45-second
+      deadlines and live progress. [x] Activity now supports a native folder
+      picker and a real, serialized local Git inspection job; [x] child
+      processes use fixed argument arrays with no shell, disabled prompts,
+      bounded stdout/stderr and process termination on cancel/timeout;
+      [x] branch and staged/modified/untracked counts are reported without
+      persisting raw filenames, URLs or command output; [x] local inspection
+      retries use previously selected paths, not arbitrary renderer paths.
+      **Remaining:** installed desktop QA for cancellation/process cleanup
+      on Linux and Windows, and transaction-aware serialization of future
+      mutating clone/fetch/pull operations when M3 adds those commands.
 - [ ] **M2.3 — Durable Activity dialog.** Implemented header-triggered
       Radix/shadcn Activity with running/history filters, job details,
       safe output, cancellation/retry and real-time event updates. The
@@ -221,9 +228,11 @@ state after a process restart.
 
 **Goal:** manage real local checkouts on Linux and Windows.
 
-- [ ] **M3.1 — Workspaces.** Native directory picker, multiple workspace
-      roots, editable repository locations, local repository detection and
-      Git executable discovery. No fixed directory layout.
+- [ ] **M3.1 — Workspaces.** [x] Native directory picker, real local Git
+      executable discovery and read-only checkout/worktree detection are
+      available in Activity via M2.2. **Remaining:** persistent multiple
+      workspace roots, editable repository locations and linkages to
+      tracked GitHub repositories. No fixed directory layout.
 - [ ] **M3.2 — Clone and sync.** Clone, fetch and pull with streamed progress;
       default pull policy is fast-forward-only. Verify origin URL, branch
       and missing/upstream state before modification.
@@ -339,21 +348,21 @@ passing release/update validation.
 6. **Do not merge on green CI alone** when a stage requires a real GitHub or
    OS-level action; record a short manual QA matrix with results.
 
-**Latest validation:** `v0.1.0-rc.8` on November 4, 2026 passed
-[Release workflow #41831312133](https://github.com/ZekStack/spindle/actions/runs/41831312133),
-built native Linux and Windows installers, and published all expected
-release assets (including updater manifests, checksums and SHA-256 upload
-digests). This confirms the digest-aware publisher introduced in PR #8.
-The preceding `rc.7` publication had succeeded with the older publisher.
-No real Mint, AppImage or NSIS upgrade has been verified yet.
+**Latest release validation:** `v0.1.0-rc.8` passed [Release workflow
+#41831312133](https://github.com/ZekStack/spindle/actions/runs/41831312133)
+on November 4, 2026. More recently, the stable `v0.1.1` and
+`v0.1.2` releases were published on November 5; `v0.1.2` passed
+[Release workflow #42003253518](https://github.com/ZekStack/spindle/actions/runs/42003253518).
+Publication proves the native tagged package-smoke gates; it does **not**
+prove a real interactive update between installed versions.
 
-**Next M0 acceptance action:** use the guarded, manually dispatched
-**Prepare RC** workflow to publish `v0.1.0-rc.9` from a green main commit,
-verify the tag-specific native smoke gates, and install that build on real
-Linux Mint/Windows machines. After recording the installed versions, publish
-`v0.1.0-rc.10` from green main and test the real in-application RC-to-RC
-download, authorization, failure/cancellation and restart on Linux Mint DEB,
-AppImage and Windows NSIS. The manual workflow automates safe tag creation
-and release dispatch, **not** OS-level QA. No native two-release upgrade is yet verified. M1 product development
-has started at user direction; **M0 release acceptance is still required**
-before declaring the distribution ready.
+**Next M0 acceptance action:** on real Linux Mint/Ubuntu DEB, AppImage and
+Windows NSIS installs, exercise the app's updater with an installed
+`v0.1.1 → v0.1.2` pair (or another two successive published builds
+with the same updater path). Record the exact starting and target versions,
+selected installer asset, checksum verification, user consent/cancellation,
+failed-install handling, installed version and relaunch. Test channel
+behavior against RC and stable feeds as described in M0.5. Do not label
+M0.2–M0.5 complete based on release CI alone. M1/M2 feature development
+is proceeding at user direction, but **M0 release acceptance remains open**
+before certifying public distribution.

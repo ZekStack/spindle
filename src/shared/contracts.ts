@@ -97,6 +97,8 @@ export interface DeviceAuthProgress {
 export interface SpindleApi {
   listJobs(): Promise<JobRecord[]>
   inspectRepository(owner: string, name: string): Promise<JobRecord>
+  pickLocalGitFolder(): Promise<JobRecord | null>
+  retryLocalGitJob(id: string): Promise<JobRecord>
   cancelJob(id: string): Promise<JobRecord>
   onJobsChanged(listener: (jobs: JobRecord[]) => void): () => void
   getWorkspace(): Promise<Workspace>

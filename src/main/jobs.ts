@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { basename, dirname, isAbsolute } from 'node:path'
+import { GitProcessError, runGit } from './git-process'
 import { validateLogin, validateRepository } from '../shared/contracts'
 import { activeJob, validateJobId, type JobErrorCode, type JobRecord } from '../shared/jobs'
 import type { GitHubClient } from './github'
@@ -28,7 +29,11 @@ function validHistory(raw: unknown): raw is JobRecord[] {
   return Array.isArray(raw) && raw.length <= MAX_HISTORY && raw.every((job) =>
     job && typeof job === 'object' && typeof job.id === 'string' &&
     typeof job.repository === 'string' && job.repository.length <= 220 &&
-    job.kind === 'repository-inspection' && job.action === 'inspect' &&
+    (job.kind === 'repository-inspection' ||
+      (job.kind === 'local-git-inspection' && typeof job.location === 'string' &&
+        job.location.length > 0 && job.location.length <= 2048 &&
+        isAbsolute(job.location) && !job.location.includes('\0'))) &&
+    job.action === 'inspect' &&
     ['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
     typeof job.requestedAt === 'string' && job.requestedAt.length <= 40 &&
     (job.startedAt === null || typeof job.startedAt === 'string') &&
@@ -43,7 +48,8 @@ function validHistory(raw: unknown): raw is JobRecord[] {
 /**
  * App-lifetime activity registry. Main owns all work and writes only fixed,
  * sanitized progress messages; secrets and HTTP response bodies are excluded.
- * M2.2 will extend this registry with child-process/Git scheduling.
+ * Local Git inspection uses a bounded child process, with serial execution
+ * and kill-on-cancel. Git output is summarized, never persisted raw.
  */
 export class JobManager {
   private history: JobRecord[] = []
@@ -108,6 +114,45 @@ export class JobManager {
     return copy(record)
   }
 
+  /** Only the native directory picker may supply a new local path. */
+  inspectLocal(pickedPath: string): JobRecord {
+    this.list()
+    if (typeof pickedPath !== 'string' || pickedPath.length > 2048) {
+      throw new Error('Invalid local folder')
+    }
+    const location = realpathSync(pickedPath)
+    if (!isAbsolute(location) || location.length > 2048 ||
+        !statSync(location).isDirectory()) throw new Error('Invalid local folder')
+    const existing = this.history.find((job) => job.kind === 'local-git-inspection' &&
+      activeJob(job.phase) && job.location === location)
+    if (existing) return copy(existing)
+    if (this.history.filter((item) => activeJob(item.phase)).length >= 20) {
+      throw new Error('Activity queue is full')
+    }
+    const label = basename(location).replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 100) || 'Local checkout'
+    const record: JobRecord = {
+      id: randomUUID(), kind: 'local-git-inspection', repository: label,
+      location, action: 'inspect',
+      requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
+      phase: 'queued', progress: 0, output: ['Local Git inspection queued.'], errorCode: null
+    }
+    this.history.unshift(record)
+    this.history = this.history.slice(0, MAX_HISTORY)
+    this.publish()
+    this.schedule()
+    return copy(record)
+  }
+
+  /** Retry a previously user-selected directory, never a renderer-supplied path. */
+  retryLocal(rawId: string): JobRecord {
+    const id = validateJobId(rawId)
+    const previous = this.history.find((job) => job.id === id)
+    if (previous?.kind !== 'local-git-inspection' || !previous.location) {
+      throw new Error('Local inspection not found')
+    }
+    return this.inspectLocal(previous.location)
+  }
+
   cancel(rawId: string): JobRecord {
     const id = validateJobId(rawId)
     const job = this.history.find((item) => item.id === id)
@@ -125,7 +170,12 @@ export class JobManager {
     queueMicrotask(() => {
       this.scheduled = false
       while (this.controllers.size < MAX_RUNNING) {
-        const next = this.history.find((job) => job.phase === 'queued')
+        // Keep local child processes serialized, including future write jobs.
+        // GitHub API inspections still use spare slots concurrently.
+        const localRunning = [...this.controllers.keys()].some((id) =>
+          this.history.some((job) => job.id === id && job.kind === 'local-git-inspection'))
+        const next = this.history.find((job) => job.phase === 'queued' &&
+          (job.kind !== 'local-git-inspection' || !localRunning))
         if (!next) break
         void this.run(next)
       }
@@ -138,35 +188,86 @@ export class JobManager {
     this.controllers.set(job.id, controller)
     job.startedAt = new Date().toISOString()
     job.phase = 'running'
-    this.line(job, 'Contacting GitHub for repository inspection.', 5)
+    this.line(job, job.kind === 'local-git-inspection'
+      ? 'Starting local Git inspection.' : 'Contacting GitHub for repository inspection.', 5)
     let timedOut = false
     const watchdog = setTimeout(() => {
       timedOut = true
       controller.abort()
     }, DEADLINE_MS)
     try {
-      await this.github.repository(owner, name, controller.signal)
-      if (controller.signal.aborted) return
-      this.line(job, 'Repository metadata loaded.', 33)
-      const releases = await this.github.releases(owner, name, controller.signal)
-      if (controller.signal.aborted) return
-      this.line(job, `Releases found: ${releases.length}.`, 66)
-      const workflows = await this.github.workflowRuns(owner, name, controller.signal)
-      if (controller.signal.aborted) return
-      this.line(job, `Recent workflow runs found: ${workflows.length}.`, 100)
-      this.finish(job, 'completed', null, 'Repository inspection completed.')
+      if (job.kind === 'local-git-inspection') {
+        await this.inspectWorktree(job, controller.signal)
+        if (controller.signal.aborted) return
+        this.finish(job, 'completed', null, 'Local Git inspection completed.')
+      } else {
+        await this.github.repository(owner, name, controller.signal)
+        if (controller.signal.aborted) return
+        this.line(job, 'Repository metadata loaded.', 33)
+        const releases = await this.github.releases(owner, name, controller.signal)
+        if (controller.signal.aborted) return
+        this.line(job, `Releases found: ${releases.length}.`, 66)
+        const workflows = await this.github.workflowRuns(owner, name, controller.signal)
+        if (controller.signal.aborted) return
+        this.line(job, `Recent workflow runs found: ${workflows.length}.`, 100)
+        this.finish(job, 'completed', null, 'Repository inspection completed.')
+      }
     } catch (error) {
       if (!activeJob(job.phase)) return
-      this.finish(job, 'failed', timedOut ? 'timeout' : codeFor(error),
-        timedOut ? 'Repository inspection timed out.' : 'Repository inspection failed.')
+      const missingGit = error instanceof GitProcessError && error.reason === 'unavailable'
+      this.finish(job, 'failed', timedOut ? 'timeout' : missingGit ? 'not-found' : codeFor(error),
+        timedOut ? 'Operation timed out.'
+          : missingGit ? 'Git executable was not found.'
+            : job.kind === 'local-git-inspection' ? 'Local Git inspection failed. Select a valid Git worktree.'
+              : 'Repository inspection failed.')
     } finally {
       clearTimeout(watchdog)
       if (timedOut && job.phase === 'running') {
-        this.finish(job, 'failed', 'timeout', 'Repository inspection timed out.')
+        this.finish(job, 'failed', 'timeout', 'Operation timed out.')
       }
       this.controllers.delete(job.id)
       this.schedule()
     }
+  }
+
+  private async inspectWorktree(job: JobRecord, signal: AbortSignal): Promise<void> {
+    if (!job.location) throw new Error('Missing selected folder')
+    this.line(job, 'Finding Git executable.', 10)
+    await runGit(['--version'], signal)
+    if (signal.aborted) return
+    this.line(job, 'Finding local working tree.', 25)
+    const top = (await runGit([
+      '-c', 'core.fsmonitor=false', '-C', job.location, 'rev-parse', '--show-toplevel'
+    ], signal)).trim()
+    if (!isAbsolute(top) || !top) throw new Error('Not a local Git worktree')
+    const root = realpathSync(top)
+    if (signal.aborted) return
+    this.line(job, 'Working tree found.', 45)
+    const branch = (await runGit([
+      '-c', 'core.fsmonitor=false', '-C', root, 'branch', '--show-current'
+    ], signal)).trim()
+    if (signal.aborted) return
+    const safeBranch = /^[a-zA-Z0-9._/-]{1,100}$/.test(branch)
+      ? branch : branch ? '(name omitted)' : '(detached HEAD)'
+    this.line(job, `Branch: ${safeBranch}.`, 60)
+    let scanned = false
+    const status = await runGit([
+      '-c', 'core.fsmonitor=false', '-C', root,
+      'status', '--porcelain=v1', '--untracked-files=normal'
+    ], signal, (chunk) => {
+      // Report streamed work without forwarding potentially sensitive paths.
+      if (!scanned && chunk.length > 0) {
+        scanned = true
+        this.line(job, 'Scanning changed files.', 80)
+      }
+    })
+    if (signal.aborted) return
+    const entries = status.trimEnd() ? status.trimEnd().split('\n') : []
+    const staged = entries.filter((line) => line[0] !== ' ' && line[0] !== '?').length
+    const unstaged = entries.filter((line) => line[1] !== ' ' && line[0] !== '?').length
+    const untracked = entries.filter((line) => line.startsWith('??')).length
+    this.line(job, `Working tree: ${entries.length ? 'changes found' : 'clean'}.`, 90)
+    this.line(job, `Staged: ${staged}; modified: ${unstaged}; untracked: ${untracked}.`, 100)
   }
 
   private line(job: JobRecord, message: string, progress: number): void {
