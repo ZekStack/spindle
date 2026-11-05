@@ -110,7 +110,7 @@ export class JobManager {
         job.phase = job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'partial' : 'interrupted'
         job.finishedAt = new Date().toISOString()
         job.errorCode = job.kind === 'local-git-tag' ? 'tag-partial' : 'interrupted'
-        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'local-git-tag'
+        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag'
         job.output.push(job.kind === 'local-git-tag'
           ? 'Interrupted tag operation; refresh local and origin tags before retrying.'
           : 'Interrupted by application restart.')
