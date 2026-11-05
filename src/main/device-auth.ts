@@ -174,7 +174,7 @@ export class GitHubDeviceAuth {
         return { phase: 'failed', nextPollAt: null }
       }
       if (this.session !== session) return { phase: 'cancelled', nextPollAt: null }
-      await this.tokens.save(token)
+      await this.tokens.save(token, info.login)
       if (this.session !== session) {
         await this.tokens.clear()
         return { phase: 'cancelled', nextPollAt: null }
