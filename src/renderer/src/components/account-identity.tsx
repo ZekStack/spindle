@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleUserRound, ExternalLink, LoaderCircle, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { GitHubIdentity } from '../../../shared/contracts'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
+import { DeviceSignIn } from './device-sign-in'
 
 function methodLabel(method: GitHubIdentity['method'], t: (key: string) => string): string {
-  return method === 'github-cli' ? t('identityCli')
+  return method === 'spindle' ? t('identitySpindle')
+    : method === 'github-cli' ? t('identityCli')
     : method === 'environment' ? t('identityEnvironment')
       : t('identityNoCredentials')
 }
@@ -21,14 +23,27 @@ export function AccountIdentity() {
     queryFn: () => window.spindle.getGitHubIdentity(),
     staleTime: 60_000
   })
+  const reloadIdentity = useCallback(async () => {
+    const current = await window.spindle.getGitHubIdentity(true)
+    cache.clear()
+    cache.setQueryData(['github-identity'], current)
+  }, [cache])
   const refresh = useMutation({
     mutationFn: () => window.spindle.getGitHubIdentity(true),
     onSuccess: (current) => {
+      // Drop viewer-specific repository data immediately on account switch.
+      cache.clear()
       cache.setQueryData(['github-identity'], current)
-      // Repository permissions may have changed with the GitHub account.
-      void cache.invalidateQueries({
-        predicate: (query) => query.queryKey[0] !== 'github-identity'
-      })
+    }
+  })
+  const signOut = useMutation({
+    mutationFn: async () => {
+      await window.spindle.signOutManagedGitHub()
+      return window.spindle.getGitHubIdentity(true)
+    },
+    onSuccess: (next) => {
+      cache.clear()
+      cache.setQueryData(['github-identity'], next)
     }
   })
   const current = identity.data
@@ -48,7 +63,7 @@ export function AccountIdentity() {
         status === 'authenticated' ? 'bg-emerald-500' :
           unavailable ? 'bg-neutral-500' : 'bg-amber-500'}`}/>
     </Button>
-    <DialogContent>
+    <DialogContent className="max-h-[90vh] overflow-y-auto">
       <DialogTitle className="text-xl font-semibold">{t('identityTitle')}</DialogTitle>
       <DialogDescription className="mt-2 text-sm text-[var(--muted)]">
         {t('identityDescription')}
@@ -97,11 +112,18 @@ export function AccountIdentity() {
             gh auth login
           </code>
         </p> : null}
-      <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">{t('identitySignOutHelp')}</p>
-      {refresh.isError && <p role="alert" className="mt-3 text-sm text-red-400">
+      <DeviceSignIn onConnected={() => { void reloadIdentity() }}/>
+      <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">
+        {current?.method === 'spindle' ? t('deviceManagedSignoutHelp') : t('identitySignOutHelp')}
+      </p>
+      {(refresh.isError || signOut.isError) && <p role="alert" className="mt-3 text-sm text-red-400">
         {t('identityRefreshError')}
       </p>}
       <div className="mt-6 flex flex-wrap justify-end gap-2">
+        {current?.method === 'spindle' && <Button variant="secondary"
+          disabled={signOut.isPending} onClick={() => signOut.mutate()}>
+          {t('deviceSignOut')}
+        </Button>}
         {viewer && <Button variant="secondary" onClick={() => {
           void window.spindle.openGitHub(viewer.htmlUrl)
         }}>

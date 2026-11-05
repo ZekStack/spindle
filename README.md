@@ -82,18 +82,24 @@ IPC bridge. GitHub requests use a fixed API origin, and external links are
 restricted to `https://github.com`. Local preferences are stored in the
 OS application data directory, not committed to the repository.
 
-**Authentication:** Spindle uses `GH_TOKEN` / `GITHUB_TOKEN` when
-available, otherwise existing GitHub CLI credentials, then anonymous
-public access. The new account button in the header shows the currently
-authenticated GitHub user, credential source, reported OAuth scopes and
-credential failures. Use **Refresh account** after changing GitHub CLI
-authentication outside Spindle. Scopes do not prove per-repository access.
+**Authentication:** Use the account dialog to sign in with GitHub
+using a **GitHub OAuth application client ID** and GitHub's device code flow.
+An OAuth app with device authorization enabled is required; enter its
+public client ID in the dialog or provide `SPINDLE_GITHUB_CLIENT_ID`.
+No client secret is packaged. The code appears in Spindle; approve it on
+GitHub in the browser. The approved token is encrypted via the OS's
+credential facilities and never exposed to the renderer.
 
-Spindle deliberately does not log out of a shared GitHub CLI session or
-modify environment tokens. Optional in-app OAuth device-flow sign-in and
-isolated logout are designed in [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md)
-but require the M1.2 secure credential storage work; they are not yet
-available. Do not distribute PATs or package credentials with the app.
+Spindle-managed credentials take precedence over existing `GH_TOKEN` /
+`GITHUB_TOKEN` and GitHub CLI tokens; otherwise it uses those external
+credentials or anonymous public access. The account dialog shows the
+active identity, reported OAuth scopes and credential failures. In-app
+sign-out removes **only** the Spindle-managed credential, leaving shared
+CLI and environment login untouched. Without a secure OS credential
+backend—particularly on Linux where `basic_text` is unsafe—managed sign-in
+is disabled. See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for
+backend details, app setup and sign-out/revocation behavior. Do not
+distribute PATs or package credentials with the application.
 
 ## Roadmap
 
