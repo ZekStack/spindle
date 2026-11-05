@@ -69,7 +69,9 @@ export async function validateSyncCheckout(
   const top = (await runGit(['-c', 'core.fsmonitor=false', '-C', path,
     'rev-parse', '--show-toplevel'], signal)).trim()
   if (realpathSync.native(top) !== live) throw new Error('Linked checkout root changed')
-  const origin = (await runGit(['-C', path, 'remote', 'get-url', 'origin'], signal)).trim()
+  // Validate the persisted origin. Git may legitimately rewrite HTTPS to SSH
+  // through a user's configured url.insteadOf rules at transport time.
+  const origin = (await runGit(['-C', path, 'config', '--get', 'remote.origin.url'], signal)).trim()
   if (githubOriginRepository(origin)?.toLowerCase() !== repository.toLowerCase()) {
     throw new Error('GitHub origin does not match linked repository')
   }
