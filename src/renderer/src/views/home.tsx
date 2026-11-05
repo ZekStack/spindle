@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, Building2, GitBranch, Search, Star } from 'lucide-react'
+import { ArrowUpRight, Building2, Search, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AddOrganization } from '../components/add-organization'
+import { AddRepository } from '../components/add-repository'
+import { TrackedRepositoryRow } from '../components/tracked-repository-row'
 import { Busy, ErrorState } from '../components/common'
 
 /** Local workspace first: no feed mocks, promotional panels or extra API calls. */
@@ -38,6 +40,7 @@ export function HomePage() {
             placeholder={t('workspaceSearch')} aria-label={t('workspaceSearch')}
             className="field h-9 w-full pl-9 text-sm" />
         </label>
+        <AddRepository compact/>
         <AddOrganization compact/>
       </div>
     </div>
@@ -56,19 +59,9 @@ export function HomePage() {
             <span className="text-xs text-[var(--muted)]">{tracked.length}</span>
           </div>
           {matchingTracked.length ? <div>
-            {matchingTracked.map((fullName) => {
-              const [owner, name] = fullName.split('/')
-              return <Link key={fullName.toLocaleLowerCase()} to="/repo/$owner/$name"
-                params={{ owner, name }}
-                className="group flex items-center gap-3 border-b border-[var(--border)] px-5 py-3.5 text-[var(--fg)] no-underline transition-colors last:border-b-0 hover:bg-[var(--hover)]">
-                <GitBranch className="size-4 shrink-0 text-orange-500"/>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium group-hover:text-orange-400">{name}</div>
-                  <div className="mt-0.5 truncate text-xs text-[var(--muted)]">{owner}</div>
-                </div>
-                <ArrowUpRight className="size-4 shrink-0 text-[var(--muted)]"/>
-              </Link>
-            })}
+            {matchingTracked.map((fullName) =>
+              <TrackedRepositoryRow key={fullName.toLocaleLowerCase()} fullName={fullName}/>
+            )
           </div> : <p className="px-5 py-8 text-sm text-[var(--muted)]">{t('workspaceNoMatches')}</p>}
         </section>}
 
