@@ -240,10 +240,10 @@ jobs:
           assert.equal(result.phase, 'idle')
           assert.equal(result.liveDownload.phase, 'ready')
           assert.equal(result.liveDownload.percent, 100)
-          assert.match(result.liveDownload.version, /^\\d+\\.\\d+\\.\\d+(?:-rc\\.\\d+)?$/)
+          assert.match(result.liveDownload.version, /^\d+\.\d+\.\d+(?:-rc\.\d+)?$/)
           console.log('Verified live GitHub DEB download: ' +
             result.version + ' -> ' + result.liveDownload.version)
           NODE
           # This job deliberately stops before calling pkexec or modifying
           # the OS package. Real Mint install/restart QA remains mandatory.
-          test "$(dpkg-query --show --showformat='\${Version}' spindle)" = '0.1.0~rc.0'
+          test "$(dpkg-query --show --showformat='${Version}' spindle)" = '0.1.0~rc.0'
