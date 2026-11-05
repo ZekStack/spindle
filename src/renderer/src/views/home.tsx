@@ -81,7 +81,9 @@ export function HomePage() {
             <span className="text-xs text-[var(--muted)]">{organizations.length}</span>
           </div>
           {matchingOrganizations.length ? <div className={hasTracked
-            ? '' : 'grid gap-0 md:grid-cols-2 2xl:grid-cols-3'}>
+            ? '' : matchingOrganizations.length >= 3
+              ? 'grid gap-0 md:grid-cols-2 2xl:grid-cols-3'
+              : 'grid gap-0 md:grid-cols-2'}>
             {matchingOrganizations.map((login) => {
               const count = tracked.filter((name) =>
                 name.split('/')[0].toLowerCase() === login.toLowerCase()).length
