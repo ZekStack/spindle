@@ -60,6 +60,12 @@ export interface GitHubIdentity {
   /** OAuth scopes, when reported by GitHub; null for unreported/fine-grained permissions. */
   scopes: string[] | null
 }
+/** Only validated GitHub logins and active selection cross the preload boundary. */
+export interface ManagedAccountList {
+  logins: string[]
+  activeLogin: string | null
+  legacyActive: boolean
+}
 /** Public device-flow details only: the secret device code never leaves main. */
 export interface DeviceAuthSetup {
   secureStorage: boolean
@@ -93,6 +99,9 @@ export interface SpindleApi {
   startDeviceAuth(clientId?: string): Promise<DeviceAuthStart>
   pollDeviceAuth(): Promise<DeviceAuthProgress>
   cancelDeviceAuth(): Promise<void>
+  listManagedGitHubAccounts(): Promise<ManagedAccountList>
+  selectManagedGitHubAccount(login: string | null): Promise<ManagedAccountList>
+  removeManagedGitHubAccount(login: string): Promise<ManagedAccountList>
   signOutManagedGitHub(): Promise<void>
   openGitHub(url: string): Promise<void>
   getUpdateStatus(): Promise<UpdateStatus>

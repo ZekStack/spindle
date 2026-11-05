@@ -89,6 +89,11 @@ export class GitHubClient {
         .map((scope) => scope.trim())
         .filter((scope) => /^[a-zA-Z0-9:_-]{1,64}$/.test(scope))
         .slice(0, 32)
+      if (method === 'spindle' && this.credentials instanceof GitHubCredentials) {
+        // Older installs contain a single encrypted token without its login.
+        // Associate it with GitHub's verified identity, without exposing it.
+        await managedGitHubToken.adoptLegacy(viewer.login).catch(() => {})
+      }
       return {
         method, state: 'authenticated',
         account: {

@@ -56,11 +56,14 @@ still requires human desktop QA.
 
 ## First-use workflow
 
-1. Open Spindle and add a GitHub organization by its login name.
-2. Browse its accessible repositories. Private repositories require sufficient
+1. Open Spindle's **Workspace** dashboard to view your organizations
+   and tracked repositories. Use the account button to switch saved GitHub
+   identities when different repositories require different permissions.
+2. Add a GitHub organization by its login name.
+3. Browse its accessible repositories. Private repositories require sufficient
    GitHub access; anonymous browsing is limited to public resources.
-3. Star repositories to track them in your local workspace.
-4. Open a repository to inspect its metadata, recent Releases and Actions runs.
+4. Star repositories to track them in your local workspace.
+5. Open a repository to inspect its metadata, recent Releases and Actions runs.
 
 Adding or removing an organization in Spindle only changes local preferences;
 it does not modify GitHub organizations, memberships or repositories.
@@ -90,14 +93,19 @@ No client secret is packaged. The code appears in Spindle; approve it on
 GitHub in the browser. The approved token is encrypted via the OS's
 credential facilities and never exposed to the renderer.
 
-Spindle-managed credentials take precedence over existing `GH_TOKEN` /
-`GITHUB_TOKEN` and GitHub CLI tokens; otherwise it uses those external
-credentials or anonymous public access. The account dialog shows the
-active identity, reported OAuth scopes and credential failures. In-app
-sign-out removes **only** the Spindle-managed credential, leaving shared
-CLI and environment login untouched. Without a secure OS credential
-backend—particularly on Linux where `basic_text` is unsafe—managed sign-in
-is disabled. See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for
+Spindle can store **multiple OS-encrypted GitHub accounts**, switch the
+active account from the header, and remove individual saved accounts.
+The selected account is used for future GitHub API requests throughout the
+local workspace; the same organization and tracked-repository list is
+preserved across switches. An external CLI/environment mode is also
+selectable without deleting saved logins. On a new authorization,
+Spindle adds or updates only that login's encrypted token.
+
+The active managed credential takes precedence over `GH_TOKEN` /
+`GITHUB_TOKEN` and GitHub CLI, which remain available as a fallback when
+external mode is selected. In-app sign-out removes **only** the selected
+Spindle credential. Without a secure OS credential backend—particularly on
+Linux where `basic_text` is unsafe—managed sign-in is disabled. See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for
 backend details, app setup and sign-out/revocation behavior. Do not
 distribute PATs or package credentials with the application.
 

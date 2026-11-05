@@ -8,11 +8,44 @@ rate-limited, forbidden and offline states.
 
 Credential selection in Electron main is:
 
-1. A Spindle-managed GitHub OAuth token, if the user signed in through the
-   app and a supported OS credential store is accessible.
+1. The **selected** Spindle-managed GitHub OAuth account, if the user signed
+   in through the app and a supported OS credential store is accessible.
+   Spindle can retain multiple separately encrypted account tokens and switch
+   between them without signing out.
 2. An external `GH_TOKEN` / `GITHUB_TOKEN` inherited by the app process.
 3. Existing `gh auth token` from GitHub CLI.
 4. Anonymous browsing of public GitHub repositories.
+
+## Multiple GitHub accounts
+
+The account dialog lists **saved Spindle-managed GitHub logins**. Adding
+another account through GitHub device authorization preserves the previous
+ones. Selecting a login changes the active GitHub identity for **future API
+requests across the workspace**; it does not change GitHub repository
+permissions or mutate the local repository list. You can also select
+**External GitHub CLI / environment credentials**, which temporarily uses
+the existing external credential fallback while preserving saved accounts.
+
+Removing an account deletes **only that account's local encrypted token**
+and selects the next saved account when available. Removing the active
+account or signing out leaves other saved accounts intact. Removing the last
+account falls back to external GH_TOKEN/GITHUB_TOKEN, GitHub CLI, or public
+anonymous access. No action runs `gh auth logout`, modifies environment
+variables, or revokes a token remotely. The renderer sees only verified
+logins and active account status; secret token values stay in Electron main.
+
+The existing `github-token.enc` single-token format is recognized.
+After GitHub verifies its login via `GET /user`, Spindle converts the
+encrypted record into a multi-account vault without exposing the token.
+All credentials **and account selection state** are stored inside the
+OS-encrypted file. Invalid/corrupted vaults are not silently overwritten.
+Switching identities clears cached private repository results.
+
+**Account scope:** the workspace is local and shared between accounts;
+each API call currently uses the selected identity. Automatically choosing
+a different token for each repository is not implemented. Private content
+inaccessible to the selected account still returns a GitHub permission
+error; users can switch accounts to inspect it.
 
 An in-app sign-out **only removes Spindle's own token**. It never calls
 `gh auth logout` or modifies an environment variable. Consequently,
@@ -48,9 +81,10 @@ and verifies `GET /user` before persisting the acquired token.
 ### OS-backed credential security
 
 Spindle uses Electron's **asynchronous** `safeStorage` encryption methods.
-The encrypted token lives only in the Electron user-data directory, in an
-atomic, private file `github-token.enc`, not in the workspace, renderer
-localStorage, logs or repository files.
+The encrypted account vault lives only in the Electron user-data directory,
+in an atomic, private file `github-token.enc`, not in the workspace, renderer
+localStorage, logs or repository files. All account tokens and selection
+metadata are encrypted as one document.
 
 - **Windows:** the async provider uses DPAPI to protect the key.
 - **Linux:** GNOME libsecret / GNOME Keyring or KWallet must be available.

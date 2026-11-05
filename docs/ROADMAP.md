@@ -146,14 +146,19 @@ M0 release gates or certify the updater for public production deployment.
       approval polling/cancel and session expiry; [x] OS-backed asynchronous
       safeStorage encryption with a hard rejection of Linux basic_text and
       missing keyring; [x] persisted app-only token integrated with GitHub
-      requests and updates; [x] account switching and isolated in-app
-      sign-out without modifying external GH_TOKEN/gh credentials;
+      requests and updates; [x] multi-account OS-encrypted vault with
+      active-login switching, external credential selection, and isolated
+      per-account removal/sign-out without changing GH_TOKEN or gh CLI;
       [x] sanitized permission-scope, invalid/revoked-token and error states.
       **Remaining acceptance:** a real GitHub OAuth App device authorization
       on Windows and Linux Mint, including encrypted persistence after restart,
       keyring-unavailable behavior and local sign-out. Remote revocation is
       explicitly a GitHub account operation, not implied by local sign-out.
       Never expose tokens through IPC, logs or Git.
+- [x] **M1 UX — Workspace-first dashboard.** Removed the centered marketing
+      hero, expanded desktop content to usable viewport width, and added
+      local tracked-repository shortcuts, organization browsing and search.
+      Preserve empty states without invented metrics or marketing content.
 - [ ] **M1.3 — Repository onboarding.** Add/remove organizations and
       individual repositories, including personal repositories, via search
       and pickers. Distinguish untracking locally from modifying GitHub.

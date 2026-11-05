@@ -6,6 +6,7 @@ import type { GitHubIdentity } from '../../../shared/contracts'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { DeviceSignIn } from './device-sign-in'
+import { ManagedAccounts } from './managed-accounts'
 
 function methodLabel(method: GitHubIdentity['method'], t: (key: string) => string): string {
   return method === 'spindle' ? t('identitySpindle')
@@ -112,6 +113,7 @@ export function AccountIdentity() {
             gh auth login
           </code>
         </p> : null}
+      <ManagedAccounts onChanged={reloadIdentity}/>
       <DeviceSignIn onConnected={() => { void reloadIdentity() }}/>
       <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">
         {current?.method === 'spindle' ? t('deviceManagedSignoutHelp') : t('identitySignOutHelp')}
