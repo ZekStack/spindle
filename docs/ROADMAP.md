@@ -238,11 +238,19 @@ state after a process restart.
 
 **Goal:** manage real local checkouts on Linux and Windows.
 
-- [ ] **M3.1 — Workspaces.** [x] Native directory picker, real local Git
-      executable discovery and read-only checkout/worktree detection are
-      available in Activity via M2.2. **Remaining:** persistent multiple
-      workspace roots, editable repository locations and linkages to
-      tracked GitHub repositories. No fixed directory layout.
+- [ ] **M3.1 — Workspaces.** [x] Native directory picker, Git executable
+      discovery and read-only checkout detection from Activity (M2.2);
+      [x] persist multiple user-selected workspace roots independently of
+      GitHub preferences; [x] associate individual GitHub repositories with
+      existing local worktrees using an explicitly selected folder and an
+      exact, credential-free GitHub origin check; [x] change/unlink locations
+      without moving or deleting files; [x] treat missing directories and
+      corrupted settings as explicit failures, never silently reassign;
+      [x] Linux/Windows test fixtures for case-insensitive repository keys,
+      Git remotes, nested folders, symlinks and persistence.
+      **Remaining acceptance:** installed Linux Mint/Windows folder-picker,
+      persistence/restart, Git unavailable, moved-worktree and relink QA.
+      No fixed workspace directory layout; no automatic clone or fetch.
 - [ ] **M3.2 — Clone and sync.** Clone, fetch and pull with streamed progress;
       default pull policy is fast-forward-only. Verify origin URL, branch
       and missing/upstream state before modification.

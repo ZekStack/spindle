@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { AddOrganization } from '../components/add-organization'
 import { AddRepository } from '../components/add-repository'
 import { TrackedRepositoryRow } from '../components/tracked-repository-row'
+import { WorkspaceDirectories } from '../components/local-workspaces'
 import { Busy, ErrorState } from '../components/common'
 
 /** Local workspace first: no feed mocks, promotional panels or extra API calls. */
@@ -107,5 +108,6 @@ export function HomePage() {
           </div>
         </section>}
       </div>}
+    <WorkspaceDirectories/>
   </div>
 }

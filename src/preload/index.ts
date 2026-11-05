@@ -16,6 +16,12 @@ const api: SpindleApi = {
     return () => ipcRenderer.removeListener('spindle:jobs:changed', handler)
   },
   getWorkspace: () => ipcRenderer.invoke('spindle:workspace:get'),
+  getLocalWorkspaces: () => ipcRenderer.invoke('spindle:local:get'),
+  pickWorkspaceRoot: () => ipcRenderer.invoke('spindle:local:pick-root'),
+  removeWorkspaceRoot: (path) => ipcRenderer.invoke('spindle:local:remove-root', path),
+  linkRepositoryFolder: (owner, name) => ipcRenderer.invoke('spindle:local:link', owner, name),
+  unlinkRepositoryFolder: (owner, name) => ipcRenderer.invoke('spindle:local:unlink', owner, name),
+  inspectLinkedRepository: (owner, name) => ipcRenderer.invoke('spindle:local:inspect', owner, name),
   addOrganization: (login) => ipcRenderer.invoke('spindle:workspace:add-org', login),
   removeOrganization: (login) => ipcRenderer.invoke('spindle:workspace:remove-org', login),
   trackRepository: (owner, name, tracked) =>

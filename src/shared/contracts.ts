@@ -6,6 +6,11 @@ export interface Workspace {
   organizations: string[]
   trackedRepositories: string[]
 }
+/** Absolute paths are supplied by Electron's native directory picker, never arbitrary renderer input. */
+export interface LocalWorkspace {
+  roots: string[]
+  repositories: { repository: string; path: string }[]
+}
 /** GitHub pagination metadata, not inferred from a full final page. */
 export interface PageResult<T> {
   items: T[]
@@ -102,6 +107,12 @@ export interface SpindleApi {
   cancelJob(id: string): Promise<JobRecord>
   onJobsChanged(listener: (jobs: JobRecord[]) => void): () => void
   getWorkspace(): Promise<Workspace>
+  getLocalWorkspaces(): Promise<LocalWorkspace>
+  pickWorkspaceRoot(): Promise<LocalWorkspace | null>
+  removeWorkspaceRoot(savedPath: string): Promise<LocalWorkspace>
+  linkRepositoryFolder(owner: string, name: string): Promise<LocalWorkspace | null>
+  unlinkRepositoryFolder(owner: string, name: string): Promise<LocalWorkspace>
+  inspectLinkedRepository(owner: string, name: string): Promise<JobRecord>
   addOrganization(login: string): Promise<Workspace>
   removeOrganization(login: string): Promise<Workspace>
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>

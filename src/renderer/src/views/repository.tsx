@@ -7,6 +7,7 @@ import { repositoryRoute } from '../router'
 import { Button } from '../components/ui/button'
 import { Busy, Chip, ErrorState, ExternalGitHub } from '../components/common'
 import { readableDate } from '../lib/utils'
+import { RepositoryCheckout } from '../components/local-workspaces'
 
 type Tab = 'overview' | 'releases' | 'workflows'
 export function RepositoryPage() {
@@ -105,6 +106,7 @@ export function RepositoryPage() {
         <div className="text-xs uppercase tracking-widest text-[var(--muted)]">{t('updated')}</div>
         <div className="mt-3 flex items-center gap-2 text-lg font-semibold"><GitCommitHorizontal className="size-4 text-orange-400"/>{readableDate(repository.data?.updatedAt, i18n.language)}</div>
       </div>
+      <RepositoryCheckout owner={owner} name={name}/>
       <div className="panel p-6 sm:col-span-2">
         <Chip tone="orange">{t('readOnly')}</Chip>
         <p className="mt-3 text-sm text-[var(--muted)]">{t('readOnlyDescription')}</p>
