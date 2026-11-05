@@ -77,7 +77,7 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:local:unlink', (owner: string, name: string) =>
     local.unlink(`${validateLogin(owner)}/${validateRepository(name)}`))
   handle('spindle:local:inspect', (owner: string, name: string) =>
-    jobs.inspectLocal(local.pathFor(`${validateLogin(owner)}/${validateRepository(name)}`)))
+    jobs.inspectLinked(owner, name))
   handle('spindle:local:clone', (owner: string, name: string, root: string) =>
     jobs.clone(owner, name, root))
   handle('spindle:local:sync', (owner: string, name: string, operation: 'fetch' | 'pull') =>
