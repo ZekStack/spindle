@@ -7,6 +7,8 @@ import type { JobRecord } from '../shared/jobs'
 const api: SpindleApi = {
   listJobs: () => ipcRenderer.invoke('spindle:jobs:list'),
   inspectRepository: (owner, name) => ipcRenderer.invoke('spindle:jobs:inspect', owner, name),
+  pickLocalGitFolder: () => ipcRenderer.invoke('spindle:jobs:local-pick'),
+  retryLocalGitJob: (id) => ipcRenderer.invoke('spindle:jobs:local-retry', id),
   cancelJob: (id) => ipcRenderer.invoke('spindle:jobs:cancel', id),
   onJobsChanged: (listener: (jobs: JobRecord[]) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, items: JobRecord[]) => listener(items)
