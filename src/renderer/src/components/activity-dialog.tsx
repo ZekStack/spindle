@@ -146,7 +146,7 @@ export function ActivityDialog() {
               </p>
               {detail.location && <p className="mt-1 break-all text-xs text-[var(--muted)]">
                 {detail.location}
-              </p> 
+              </p>}
               <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"
                 role="progressbar" aria-label={t('activityProgress')} aria-valuemin={0}
                 aria-valuemax={100} aria-valuenow={detail.progress}>
