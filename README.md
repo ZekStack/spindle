@@ -44,6 +44,9 @@ ephemeral Ubuntu runner and verifies package ownership, version and updater
 identity through the packaged application. A separate Ubuntu integration job
 also builds two unpublished RC packages and exercises the verified Debian
 installer against real dpkg state, including simulated authorization denial.
+A dedicated Ubuntu job also exercises the real public GitHub update feed and
+downloads a published Debian update through the packaged application's IPC,
+without installing it or claiming to validate the restart flow.
 Windows CI likewise builds and silently installs two NSIS versions in
 sequence, checking the packaged updater/IPC identity and changed application
 payload. Another Ubuntu job launches two real AppImage builds and checks

@@ -75,6 +75,29 @@ The tagged-install smoke and synthetic CI upgrades do not satisfy this
 end-to-end acceptance. Until these results are recorded and confirmed,
 M0.2–M0.5 remain open and M1 does not start.
 
+## Live GitHub release-feed download regression (M0.2)
+
+A dedicated Ubuntu CI job installs a *synthetic, unpublished* older
+`0.1.0-rc.0` Debian build and exercises the actual installed Electron
+application's typed IPC methods to **check** public GitHub Releases and
+**download** a newer, published DEB. The production strict Debian updater
+must select the exact `.deb` entry from the mixed Linux manifest before
+downloading, reject missing or invalid SHA-512 metadata, and transition
+to the `ready` state only when the download completes. A smoke-only result
+file proves the running version, Debian identity, selected newer version
+and ready/100% state.
+
+This uses **real GitHub networking**, not a fixture feed or mocked updater.
+The job deliberately never invokes `pkexec` or installs the downloaded DEB;
+it checks that `dpkg-query` remains at the old version. It therefore adds
+network/download regression coverage but does **not** validate interactive
+Linux Mint authorization, cancellation, installed version or relaunch.
+
+Because this test depends on GitHub Releases and download hosting, network
+outages may fail the dedicated integration job independently of source
+code. Inspect network and HTTP failure categories before changing code or
+retrying; never bypass checksum verification to make it pass.
+
 ## Native installer smoke gate on release tags
 
 The tagged **Release** workflow now tests its actual tag-stamped installers

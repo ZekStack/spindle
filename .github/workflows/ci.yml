@@ -194,3 +194,56 @@ jobs:
         env:
           SPINDLE_NATIVE_APPIMAGE_UPGRADE: '1'
         run: bash ./scripts/test-appimage-upgrade.sh
+
+  live-deb-download:
+    name: Live GitHub DEB update download / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build an unpublished older RC Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-release.mjs --prepare v0.1.0-rc.0
+          pnpm build
+          pnpm exec electron-builder --linux deb --x64 --publish never
+          test -f release/Spindle-0.1.0-rc.0-linux-x64.deb
+      - name: Install and exercise real public GitHub DEB update check and download
+        shell: bash
+        env:
+          SPINDLE_SMOKE_TEST: '1'
+          SPINDLE_SMOKE_INSTALLED_DEB: '1'
+          SPINDLE_SMOKE_LIVE_DEB_UPDATE: '1'
+        run: |
+          set -euo pipefail
+          sudo apt-get install --yes ./release/Spindle-0.1.0-rc.0-linux-x64.deb
+          export SPINDLE_SMOKE_RESULT_FILE="$RUNNER_TEMP/spindle-live-deb.json"
+          # Anonymous public release access: do not supply a GitHub token to
+          # the application process; we want to exercise the public feed.
+          unset GH_TOKEN GITHUB_TOKEN
+          xvfb-run -a timeout 360s /opt/Spindle/spindle --no-sandbox
+          node - "$SPINDLE_SMOKE_RESULT_FILE" <<'NODE'
+          const assert = require('node:assert/strict')
+          const fs = require('node:fs')
+          const result = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          assert.equal(result.version, '0.1.0-rc.0')
+          assert.equal(result.installType, 'deb')
+          assert.equal(result.phase, 'idle')
+          assert.equal(result.liveDownload.phase, 'ready')
+          assert.equal(result.liveDownload.percent, 100)
+          assert.match(result.liveDownload.version, /^\d+\.\d+\.\d+(?:-rc\.\d+)?$/)
+          console.log('Verified live GitHub DEB download: ' +
+            result.version + ' -> ' + result.liveDownload.version)
+          NODE
+          # This job deliberately stops before calling pkexec or modifying
+          # the OS package. Real Mint install/restart QA remains mandatory.
+          test "$(dpkg-query --show --showformat='${Version}' spindle)" = '0.1.0~rc.0'

@@ -79,8 +79,11 @@ release pipeline that leaves users on the wrong version.
       downloads and installation; [x] CI installs the generated DEB on a
       GitHub-hosted Ubuntu runner and smokes packaged updater identity,
       dpkg ownership, version equality, preload and typed IPC; [x] release
-      pipeline installs and smoke-tests the exact tagged DEB before publish.
-      **Real Linux Mint upgrade QA remains open.**
+      pipeline installs and smoke-tests the exact tagged DEB before publish;
+      [x] a dedicated Ubuntu CI job installs a synthetic older RC and uses
+      the production updater over the public GitHub feed to download the
+      latest published DEB, checking the ready state without elevation.
+      **Real Linux Mint update/install/restart QA remains open.**
 - [ ] **M0.3 — Debian install and restart.** Test a real **new RC → newer
       RC** update: single authorization, package-manager success, expected
       `dpkg-query` version, restart into the newly installed binary. Cancel
