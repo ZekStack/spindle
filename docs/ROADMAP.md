@@ -195,12 +195,19 @@ real status rather than showing a spinner indefinitely.
       preload IPC exposes only job list, repository inspection and cancel,
       plus live updates. The first real operation inspects repository
       metadata, releases and workflow runs from Electron main.
-- [ ] **M2.2 — Execution lifecycle.** Initial main-process queue
-      supports two concurrent read-only repository inspections, bounded
-      queue size, per-repository deduplication, cancellation via AbortSignal,
-      45-second deadlines and live progress. **Remaining:** child-process
-      execution/cleanup, streamed Git output and strict mutating-operation
-      serialization when local Git operations arrive in M3.
+- [ ] **M2.2 — Execution lifecycle.** The main-process queue supports two
+      concurrent read-only repository inspections, bounded queue size,
+      per-repository deduplication, cancellation via AbortSignal, 45-second
+      deadlines and live progress. [x] Activity now supports a native folder
+      picker and a real, serialized local Git inspection job; [x] child
+      processes use fixed argument arrays with no shell, disabled prompts,
+      bounded stdout/stderr and process termination on cancel/timeout;
+      [x] branch and staged/modified/untracked counts are reported without
+      persisting raw filenames, URLs or command output; [x] local inspection
+      retries use previously selected paths, not arbitrary renderer paths.
+      **Remaining:** installed desktop QA for cancellation/process cleanup
+      on Linux and Windows, and transaction-aware serialization of future
+      mutating clone/fetch/pull operations when M3 adds those commands.
 - [ ] **M2.3 — Durable Activity dialog.** Implemented header-triggered
       Radix/shadcn Activity with running/history filters, job details,
       safe output, cancellation/retry and real-time event updates. The
@@ -221,9 +228,11 @@ state after a process restart.
 
 **Goal:** manage real local checkouts on Linux and Windows.
 
-- [ ] **M3.1 — Workspaces.** Native directory picker, multiple workspace
-      roots, editable repository locations, local repository detection and
-      Git executable discovery. No fixed directory layout.
+- [ ] **M3.1 — Workspaces.** [x] Native directory picker, real local Git
+      executable discovery and read-only checkout/worktree detection are
+      available in Activity via M2.2. **Remaining:** persistent multiple
+      workspace roots, editable repository locations and linkages to
+      tracked GitHub repositories. No fixed directory layout.
 - [ ] **M3.2 — Clone and sync.** Clone, fetch and pull with streamed progress;
       default pull policy is fast-forward-only. Verify origin URL, branch
       and missing/upstream state before modification.
