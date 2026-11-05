@@ -15,6 +15,15 @@ function git(folder: string, ...args: string[]) {
 function folder() {
   return mkdtempSync(join(tmpdir(), 'spindle-local-root-'))
 }
+function gitTop(folderPath: string): string {
+  // Git normalizes Windows 8.3 short aliases (RUNNER~1) differently
+  // from node:fs.realpathSync on hosted Windows machines.
+  return execFileSync('git', ['-C', folderPath, 'rev-parse', '--show-toplevel'],
+    { encoding: 'utf8', timeout: 10_000 }).trim()
+}
+function assertSameCheckout(actual: string, expected: string): void {
+  assert.equal(gitTop(actual), gitTop(expected))
+}
 function checkout(root: string, name: string, origin: string): string {
   const path = join(root, name)
   mkdirSync(path)
@@ -84,18 +93,18 @@ test('link and relink require matching actual Git origin and preserve associatio
     const store = new LocalWorkspaceStore(file)
     store.addRootFromPicker(dir)
     await store.linkFromPicker('ExampleOrg/project', nested)
-    assert.equal(store.pathFor('exampleorg/PROJECT'), realpathSync(first))
-    assert.deepEqual(store.load().repositories, [
-      { repository: 'ExampleOrg/project', path: realpathSync(first) }
-    ])
+    assertSameCheckout(store.pathFor('exampleorg/PROJECT'), first)
+    assert.equal(store.load().repositories[0].repository, 'ExampleOrg/project')
+    assertSameCheckout(store.load().repositories[0].path, first)
     await assert.rejects(store.linkFromPicker('ExampleOrg/project', wrong), /origin/)
-    assert.equal(store.pathFor('ExampleOrg/project'), realpathSync(first))
+    assertSameCheckout(store.pathFor('ExampleOrg/project'), first)
     await store.linkFromPicker('exampleorg/project', second)
-    assert.equal(store.pathFor('ExampleOrg/PROJECT'), realpathSync(second))
-    assert.deepEqual(new LocalWorkspaceStore(file).load().repositories,
-      [{ repository: 'ExampleOrg/project', path: realpathSync(second) }])
-    assert.deepEqual(store.removeRoot(resolve(dir)).roots, [])
-    assert.equal(store.pathFor('ExampleOrg/project'), realpathSync(second))
+    assertSameCheckout(store.pathFor('ExampleOrg/PROJECT'), second)
+    assert.equal(new LocalWorkspaceStore(file).load().repositories[0].repository,
+      'ExampleOrg/project')
+    assertSameCheckout(new LocalWorkspaceStore(file).load().repositories[0].path, second)
+    assert.deepEqual(store.removeRoot(store.load().roots[0]).roots, [])
+    assertSameCheckout(store.pathFor('ExampleOrg/project'), second)
     store.unlink('EXAMPLEORG/project')
     assert.deepEqual(store.load().repositories, [])
     assert.equal(existsSync(second), true)
@@ -128,9 +137,9 @@ test('corrupt workspace preferences are never overwritten and missing paths rema
     const checkoutDir = checkout(dir, 'checkout', 'https://github.com/ExampleOrg/project.git')
     const store = new LocalWorkspaceStore(file)
     await store.linkFromPicker('ExampleOrg/project', checkoutDir)
-    const canonical = realpathSync(checkoutDir)
+    const savedPath = store.pathFor('ExampleOrg/project')
     rmSync(checkoutDir, { recursive: true, force: true })
-    assert.equal(store.pathFor('ExampleOrg/project'), canonical)
+    assert.equal(store.pathFor('ExampleOrg/project'), savedPath)
     writeFileSync(file, '{invalid JSON')
     assert.throws(() => store.load())
     assert.throws(() => store.addRootFromPicker(dir))
