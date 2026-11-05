@@ -16,6 +16,7 @@ export interface GitTagsSnapshot {
   branch: string | null
   localTotal: number
   originTotal: number
+  total: number
   originState: 'available' | 'unavailable'
   originError: 'auth' | 'network' | 'unknown' | null
   entries: GitTagEntry[]
