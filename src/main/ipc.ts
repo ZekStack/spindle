@@ -7,6 +7,7 @@ import { managedGitHubToken } from './managed-token'
 import { WorkspaceStore } from './store'
 import { LocalWorkspaceStore } from './local-workspaces'
 import { JobManager } from './jobs'
+import type { TagMutationRequest } from '../shared/tags'
 import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
 
@@ -84,6 +85,9 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     jobs.sync(owner, name, operation))
   handle('spindle:local:pull-preview', (owner: string, name: string) =>
     jobs.previewPull(owner, name))
+  handle('spindle:local:tags', (owner: string, name: string) => jobs.tags(owner, name))
+  handle('spindle:local:tag-action', (owner: string, name: string, request: TagMutationRequest) =>
+    jobs.mutateTag(owner, name, request))
   handle('spindle:workspace:get', () => store.load())
   handle('spindle:workspace:add-org', async (login: string) => {
     const org = await github.organization(validateLogin(login))
