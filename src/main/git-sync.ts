@@ -134,9 +134,11 @@ export async function pullReadiness(
   try {
     const { path, branch } = await validateSyncCheckout(store, repository, signal)
     result.branch = branch
-    await assertNoGitOperation(path, signal)
     const changes = await readGitChanges(path, signal)
     Object.assign(result, changes)
+    // Show unresolved conflicts before generic in-progress or dirty warnings.
+    if (changes.conflicted) assertCleanChanges(changes)
+    await assertNoGitOperation(path, signal)
     assertCleanChanges(changes)
     const divergence = await gitDivergence(path, signal)
     Object.assign(result, divergence)
@@ -170,8 +172,10 @@ export async function syncCheckout(
       signal, progress(onProgress, 45, 30))
     if (signal.aborted) return
     await validateSyncCheckout(store, repository, signal)
+    const currentChanges = await readGitChanges(path, signal)
+    if (currentChanges.conflicted) assertCleanChanges(currentChanges)
     await assertNoGitOperation(path, signal)
-    assertCleanChanges(await readGitChanges(path, signal))
+    assertCleanChanges(currentChanges)
     assertFastForward(await gitDivergence(path, signal))
     if (signal.aborted) return
     // merge --ff-only cannot rewrite divergent history or create a merge
