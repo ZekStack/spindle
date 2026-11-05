@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import {
   validateLogin, validatePage, validateRepository,
-  type AuthStatus, type Organization, type Release, type Repository, type WorkflowRun
+  type AuthStatus, type GitHubIdentity, type Organization, type Release, type Repository, type WorkflowRun
 } from '../shared/contracts'
 
 const execFileAsync = promisify(execFile)
@@ -28,15 +28,77 @@ export class GitHubCredentials {
     this.cache = { value, until: Date.now() + 30_000 }
     return value
   }
+  invalidate(): void { this.cache = null }
 }
 
 export class GitHubClient {
   constructor(
     private readonly requestFn: RequestFn = fetch,
-    private readonly credentials: { get(): Promise<Credentials> } = new GitHubCredentials()
+    private readonly credentials: {
+      get(): Promise<Credentials>
+      invalidate?(): void
+    } = new GitHubCredentials()
   ) {}
   async authStatus(): Promise<AuthStatus> {
     return { method: (await this.credentials.get()).method }
+  }
+
+  /** Resolve the current viewer without crossing IPC with credentials or raw errors. */
+  async identity(refresh = false): Promise<GitHubIdentity> {
+    if (refresh) this.credentials.invalidate?.()
+    let method: AuthStatus['method'] = 'anonymous'
+    const state = (
+      kind: GitHubIdentity['state']
+    ): GitHubIdentity => ({ method, state: kind, account: null, scopes: null })
+    try {
+      const credentials = await this.credentials.get()
+      method = credentials.method
+      if (!credentials.token) return state('anonymous')
+      const response = await this.requestFn(BASE + '/user', {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Spindle-Desktop',
+          Authorization: `Bearer ${credentials.token}`
+        },
+        signal: AbortSignal.timeout(12_000)
+      })
+      if (response.status === 401) return state('invalid')
+      if (response.status === 403) {
+        return state(response.headers.get('x-ratelimit-remaining') === '0'
+          ? 'rate-limited' : 'forbidden')
+      }
+      if (!response.ok) return state('unavailable')
+      const viewer = await response.json() as {
+        login?: unknown; name?: unknown; avatar_url?: unknown
+      }
+      if (typeof viewer.login !== 'string' ||
+          !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(viewer.login)) {
+        return state('unavailable')
+      }
+      const avatar = typeof viewer.avatar_url === 'string' &&
+        /^https:\/\/avatars\.githubusercontent\.com\//.test(viewer.avatar_url)
+        ? viewer.avatar_url : null
+      const scopeHeader = response.headers.get('x-oauth-scopes')
+      const scopes = scopeHeader === null ? null : scopeHeader.split(',')
+        .map((scope) => scope.trim())
+        .filter((scope) => /^[a-zA-Z0-9:_-]{1,64}$/.test(scope))
+        .slice(0, 32)
+      return {
+        method, state: 'authenticated',
+        account: {
+          login: viewer.login,
+          name: typeof viewer.name === 'string' ? viewer.name.slice(0, 120) : null,
+          avatarUrl: avatar,
+          htmlUrl: `https://github.com/${viewer.login}`
+        },
+        scopes
+      }
+    } catch {
+      // Timeouts, offline state and invalid JSON must never expose request
+      // headers, tokens or token-bearing URLs to the renderer.
+      return state('unavailable')
+    }
   }
   private async request<T>(path: string): Promise<T> {
     const creds = await this.credentials.get()
