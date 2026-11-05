@@ -1,6 +1,7 @@
 // The renderer knows only these data shapes and the methods exposed by preload.
 // No filesystem, Node, shell, credentials, or general-purpose IPC access.
 import type { UpdateStatus } from './update-policy'
+import type { JobRecord } from './jobs'
 export interface Workspace {
   organizations: string[]
   trackedRepositories: string[]
@@ -94,6 +95,10 @@ export interface DeviceAuthProgress {
 }
 
 export interface SpindleApi {
+  listJobs(): Promise<JobRecord[]>
+  inspectRepository(owner: string, name: string): Promise<JobRecord>
+  cancelJob(id: string): Promise<JobRecord>
+  onJobsChanged(listener: (jobs: JobRecord[]) => void): () => void
   getWorkspace(): Promise<Workspace>
   addOrganization(login: string): Promise<Workspace>
   removeOrganization(login: string): Promise<Workspace>
