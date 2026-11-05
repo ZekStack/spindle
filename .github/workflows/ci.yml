@@ -54,7 +54,7 @@ jobs:
         run: bash ./scripts/retry-electron-builder.sh --linux AppImage deb --x64 --publish never
       - name: Package Windows (.exe)
         if: runner.os == 'Windows'
-        run: pnpm exec electron-builder --win nsis --x64 --publish never
+        run: ./scripts/retry-nsis-build.ps1
       - name: Verify Linux updater metadata
         if: runner.os == 'Linux'
         run: node scripts/verify-update-metadata.mjs linux 0.1.0 release
@@ -150,7 +150,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm exec electron-builder --win nsis --x64 --publish never
+          ./scripts/retry-nsis-build.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build a newer RC NSIS installer (not published)
         shell: pwsh
@@ -159,7 +159,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm exec electron-builder --win nsis --x64 --publish never
+          ./scripts/retry-nsis-build.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify real silent NSIS install and upgrade
         shell: pwsh

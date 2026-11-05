@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, Download, FolderGit2, FolderOpen, Link2, Trash2, Unlink } from 'lucide-react'
+import { ArrowDown, Download, FolderGit2, FolderOpen, Link2, RotateCcw, Trash2, Unlink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { LocalWorkspace } from '../../../shared/contracts'
+import type { PullReadiness } from '../../../shared/git-safety'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { LinkedInspection } from './linked-inspection'
@@ -103,8 +104,23 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
   const [cloneOpen, setCloneOpen] = useState(false)
   const [cloneRoot, setCloneRoot] = useState('')
   const [pullOpen, setPullOpen] = useState(false)
+  const [pullPreview, setPullPreview] = useState<PullReadiness | null>(null)
+  const [pullPreviewFailed, setPullPreviewFailed] = useState(false)
+  const [pullPreviewRevision, setPullPreviewRevision] = useState(0)
   const linked = query.data?.repositories.find((item) =>
     item.repository.toLowerCase() === `${owner}/${name}`.toLowerCase())
+
+  // The preview is advisory. Main repeats the same guards at job execution.
+  useEffect(() => {
+    if (!pullOpen) return
+    let current = true
+    setPullPreview(null)
+    setPullPreviewFailed(false)
+    void window.spindle.previewLinkedPull(owner, name).then((status) => {
+      if (current) setPullPreview(status)
+    }).catch(() => { if (current) setPullPreviewFailed(true) })
+    return () => { current = false }
+  }, [pullOpen, owner, name, pullPreviewRevision])
 
   // Cloning links a checkout only after Git and origin verification complete.
   useEffect(() => window.spindle.onJobsChanged((jobs) => {
@@ -214,12 +230,54 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
         <DialogDescription className="mt-2 text-sm text-[var(--muted)]">
           {t('localPullDetails')}
         </DialogDescription>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" disabled={busy} onClick={() => setPullOpen(false)}>{t('localCancel')}</Button>
-          <Button disabled={busy} onClick={() =>
+        <div className="mt-4 rounded-lg border border-[var(--border)] p-3">
+          {!pullPreview && !pullPreviewFailed && <p role="status" className="text-sm text-[var(--muted)]">
+            {t('localPullSafetyChecking')}
+          </p>}
+          {pullPreviewFailed && <p role="alert" className="text-sm text-red-400">
+            {t('localPullSafetyError')}
+          </p>}
+          {pullPreview && <div className="space-y-2">
+            <p role="status" className={pullPreview.ready ? 'text-sm text-[var(--fg)]' : 'text-sm text-amber-400'}>
+              {pullPreview.ready
+                ? `${t('localPullSafetyReady')} ${pullPreview.branch ?? '—'}`
+                : t('localPullSafetyBlocked')}
+            </p>
+            {pullPreview.reason && <p className="text-sm text-[var(--muted)]">
+              {t(`localSafety_${pullPreview.reason}`)}
+            </p>}
+            <p className="text-xs text-[var(--muted)]">
+              {t('localPullSafetyCounts')}: {[
+                pullPreview.staged, pullPreview.unstaged,
+                pullPreview.untracked, pullPreview.conflicted
+              ].join(' / ')}
+            </p>
+            {pullPreview.ahead !== null && pullPreview.behind !== null &&
+              <p className="text-xs text-[var(--muted)]">
+                {t('gitSnapshotAhead')}: {pullPreview.ahead} · {t('gitSnapshotBehind')}: {pullPreview.behind}
+              </p>}
+          </div>}
+        </div>
+        <p className="mt-3 text-xs text-[var(--muted)]">{t('localPullSafetyAdvisory')}</p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" size="sm" disabled={busy}
+            onClick={() => setPullPreviewRevision((value) => value + 1)}>
+            <RotateCcw className="size-3.5"/>{t('localPullSafetyRefresh')}
+          </Button>
+          <Button variant="secondary" disabled={busy} onClick={() => setPullOpen(false)}>
+            {t('localCancel')}
+          </Button>
+          {pullPreview && !pullPreview.ready && !!pullPreview.reason &&
+            ['dirty-worktree', 'conflicted', 'detached-head', 'upstream-missing',
+              'upstream-mismatch', 'diverged'].includes(pullPreview.reason) &&
+            <Button variant="secondary" disabled={busy} onClick={() =>
+              void startJob(() => window.spindle.syncLinkedRepository(owner, name, 'fetch'))}>
+              <Download className="size-3.5"/>{t('localPullSafetyFetchOnly')}
+            </Button>}
+          {pullPreview?.ready && <Button disabled={busy} onClick={() =>
             void startJob(() => window.spindle.syncLinkedRepository(owner, name, 'pull'))}>
             {t('localPull')}
-          </Button>
+          </Button>}
         </div>
       </DialogContent>
     </Dialog>

@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { LocalWorkspaceStore } from '../src/main/local-workspaces'
 import { cloneCheckout, syncCheckout, validateSyncCheckout } from '../src/main/git-sync'
+import { GitSafetyError } from '../src/main/git-safety'
 import { JobManager } from '../src/main/jobs'
 import type { GitHubClient } from '../src/main/github'
 
@@ -77,7 +78,8 @@ test('clone and sync use saved roots, validated GitHub origins, and ff-only pull
 
     writeFileSync(join(target, 'README.md'), 'local changes\n')
     await assert.rejects(syncCheckout(store, 'ExampleOrg/project', 'pull',
-      new AbortController().signal, () => {}), /clean/)
+      new AbortController().signal, () => {}),
+      (error: unknown) => error instanceof GitSafetyError && error.code === 'dirty-worktree')
     assert.equal(fileText(join(target, 'README.md')), 'local changes\n')
     git('-C', target, 'checkout', '--', 'README.md')
     git('-C', target, 'checkout', '--detach', '-q', 'HEAD')

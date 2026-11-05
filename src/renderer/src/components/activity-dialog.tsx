@@ -7,18 +7,27 @@ import { GitInspectionView } from './git-inspection-view'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 
 type Filter = 'active' | 'history'
-function errorKey(code: JobErrorCode | null): string {
+function errorKey(code: JobErrorCode | null, localGit = false): string {
   switch (code) {
-    case 'auth': return 'activityErrorAuth'
+    case 'auth': return localGit ? 'localSafety_auth' : 'activityErrorAuth'
     case 'forbidden': return 'activityErrorForbidden'
     case 'not-found': return 'activityErrorNotFound'
     case 'rate-limit': return 'activityErrorRateLimit'
-    case 'network': return 'activityErrorNetwork'
+    case 'network': return localGit ? 'localSafety_network' : 'activityErrorNetwork'
     case 'timeout': return 'activityErrorTimeout'
     case 'interrupted': return 'activityErrorInterrupted'
     case 'git-unavailable': return 'activityGitUnavailable'
     case 'git-failed': return 'activityLocalGitFailed'
     case 'output-limit': return 'activityErrorOutputLimit'
+    case 'checkout-moved': return 'localSafety_checkout-moved'
+    case 'origin-mismatch': return 'localSafety_origin-mismatch'
+    case 'detached-head': return 'localSafety_detached-head'
+    case 'upstream-missing': return 'localSafety_upstream-missing'
+    case 'upstream-mismatch': return 'localSafety_upstream-mismatch'
+    case 'operation-in-progress': return 'localSafety_operation-in-progress'
+    case 'conflicted': return 'localSafety_conflicted'
+    case 'dirty-worktree': return 'localSafety_dirty-worktree'
+    case 'diverged': return 'localSafety_diverged'
     default: return 'activityErrorUnknown'
   }
 }
@@ -166,7 +175,7 @@ export function ActivityDialog() {
               </p>
               {detail.errorCode && <p role="alert" className="mt-3 text-sm text-red-400">
                 {t(detail.kind === 'local-git-inspection' && detail.errorCode === 'not-found'
-                  ? 'activityGitUnavailable' : errorKey(detail.errorCode))}
+                  ? 'activityGitUnavailable' : errorKey(detail.errorCode, detail.kind !== 'repository-inspection'))}
               </p>}
               {detail.errorCode && detail.retryable !== undefined &&
                 <p className="mt-2 text-xs text-[var(--muted)]">

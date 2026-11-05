@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync
 import { basename, dirname, isAbsolute } from 'node:path'
 import { GitProcessError, runGit } from './git-process'
 import { validateLogin, validateRepository } from '../shared/contracts'
-import { cloneCheckout, syncCheckout, type SyncOperation } from './git-sync'
+import { cloneCheckout, pullReadiness, syncCheckout, type SyncOperation } from './git-sync'
+import { GitSafetyError } from './git-safety'
+import { GIT_SAFETY_CODES, type PullReadiness } from '../shared/git-safety'
 import { inspectGitCheckout } from './git-inspection'
 import { validGitInspection } from '../shared/git-inspection'
 import type { LocalWorkspaceStore } from './local-workspaces'
@@ -55,7 +57,7 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     job.output.every((line: unknown) => typeof line === 'string' && line.length <= 160) &&
     (job.errorCode === null || ['auth', 'forbidden', 'not-found', 'rate-limit',
       'network', 'timeout', 'interrupted', 'git-unavailable', 'git-failed',
-      'output-limit', 'unknown'].includes(job.errorCode)) &&
+      'output-limit', 'unknown', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
     (job.retryable === undefined || typeof job.retryable === 'boolean') &&
     (job.linkedRepository === undefined ||
       (job.kind === 'local-git-inspection' && typeof job.linkedRepository === 'string' &&
@@ -228,6 +230,20 @@ export class JobManager {
       this.local.pathFor(repository))
   }
 
+  /** Advises the renderer, never authorizes a future write operation. */
+  async previewPull(ownerValue: string, nameValue: string): Promise<PullReadiness> {
+    this.list()
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    if (!this.local) throw new Error('Local workspace storage is not configured')
+    if (this.history.some((item) => activeJob(item.phase) && isLocal(item.kind) &&
+      item.repository.toLowerCase() === repository.toLowerCase())) {
+      return { ready: false, reason: 'operation-in-progress', branch: null,
+        staged: 0, unstaged: 0, untracked: 0, conflicted: 0,
+        ahead: null, behind: null }
+    }
+    return pullReadiness(this.local, repository, AbortSignal.timeout(15_000))
+  }
+
   cancel(rawId: string): JobRecord {
     const id = validateJobId(rawId)
     const job = this.history.find((item) => item.id === id)
@@ -305,7 +321,8 @@ export class JobManager {
         ? error.reason === 'unavailable' ? 'git-unavailable'
           : error.reason === 'output-limit' ? 'output-limit' : 'git-failed'
         : null
-      const code = timedOut ? 'timeout' : gitFailure ?? codeFor(error)
+      const code = timedOut ? 'timeout'
+        : error instanceof GitSafetyError ? error.code : gitFailure ?? codeFor(error)
       // Progress can reflect useful completed steps even when a subsequent
       // GitHub or local Git request fails; never report false full success.
       const hasPartialResult = job.kind === 'repository-inspection'

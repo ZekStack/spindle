@@ -1,10 +1,11 @@
 import type { LocalGitInspection } from './git-inspection'
+import type { GitSafetyCode } from './git-safety'
 
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection' |
   'local-git-clone' | 'local-git-fetch' | 'local-git-pull'
 export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
-export type JobErrorCode = 'auth' | 'forbidden' | 'not-found' | 'rate-limit' | 'network' |
+export type JobErrorCode = GitSafetyCode | 'forbidden' | 'not-found' | 'rate-limit' |
   'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' | 'unknown'
 
 export interface JobRecord {
