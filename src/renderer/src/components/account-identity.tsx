@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleUserRound, ExternalLink, LoaderCircle, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { GitHubIdentity } from '../../../shared/contracts'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
+import { DeviceSignIn } from './device-sign-in'
 
 function methodLabel(method: GitHubIdentity['method'], t: (key: string) => string): string {
-  return method === 'github-cli' ? t('identityCli')
+  return method === 'spindle' ? t('identitySpindle')
+    : method === 'github-cli' ? t('identityCli')
     : method === 'environment' ? t('identityEnvironment')
       : t('identityNoCredentials')
 }
@@ -21,11 +23,30 @@ export function AccountIdentity() {
     queryFn: () => window.spindle.getGitHubIdentity(),
     staleTime: 60_000
   })
+  const reloadIdentity = useCallback(async () => {
+    const current = await window.spindle.getGitHubIdentity(true)
+    cache.setQueryData(['github-identity'], current)
+    await cache.invalidateQueries({
+      predicate: (query) => query.queryKey[0] !== 'github-identity'
+    })
+  }, [cache])
   const refresh = useMutation({
     mutationFn: () => window.spindle.getGitHubIdentity(true),
     onSuccess: (current) => {
       cache.setQueryData(['github-identity'], current)
       // Repository permissions may have changed with the GitHub account.
+      void cache.invalidateQueries({
+        predicate: (query) => query.queryKey[0] !== 'github-identity'
+      })
+    }
+  })
+  const signOut = useMutation({
+    mutationFn: async () => {
+      await window.spindle.signOutManagedGitHub()
+      return window.spindle.getGitHubIdentity(true)
+    },
+    onSuccess: (next) => {
+      cache.setQueryData(['github-identity'], next)
       void cache.invalidateQueries({
         predicate: (query) => query.queryKey[0] !== 'github-identity'
       })
@@ -97,11 +118,18 @@ export function AccountIdentity() {
             gh auth login
           </code>
         </p> : null}
-      <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">{t('identitySignOutHelp')}</p>
-      {refresh.isError && <p role="alert" className="mt-3 text-sm text-red-400">
+      <DeviceSignIn onConnected={() => { void reloadIdentity() }}/>
+      <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">
+        {current?.method === 'spindle' ? t('deviceManagedSignoutHelp') : t('identitySignOutHelp')}
+      </p>
+      {(refresh.isError || signOut.isError) && <p role="alert" className="mt-3 text-sm text-red-400">
         {t('identityRefreshError')}
       </p>}
       <div className="mt-6 flex flex-wrap justify-end gap-2">
+        {current?.method === 'spindle' && <Button variant="secondary"
+          disabled={signOut.isPending} onClick={() => signOut.mutate()}>
+          {t('deviceSignOut')}
+        </Button>}
         {viewer && <Button variant="secondary" onClick={() => {
           void window.spindle.openGitHub(viewer.htmlUrl)
         }}>
