@@ -167,7 +167,9 @@ export function ActivityDialog() {
               </p>}
               {detail.errorCode && detail.retryable !== undefined &&
                 <p className="mt-2 text-xs text-[var(--muted)]">
-                  {t(detail.retryable ? 'activityRetryable' : 'activityActionRequired')}
+                  {t(detail.retryable ? 'activityRetryable'
+                    : detail.kind === 'local-git-inspection'
+                      ? 'activityLocalActionRequired' : 'activityActionRequired')}
                 </p>}
               {detail.phase === 'partial' && <p role="status" className="mt-2 text-xs text-amber-400">
                 {t('activityPartialNotice')}
