@@ -55,6 +55,7 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     return store.trackRepository(safeOwner, safeName, tracked)
   })
   handle('spindle:github:organization', (login: string) => github.organization(login))
+  handle('spindle:github:search-orgs', (query: string, page: number) => github.searchOrganizations(query, page))
   handle('spindle:github:repositories', (login: string, page: number) => github.repositories(login, page))
   handle('spindle:github:search-repos', (query: string, page: number) => github.searchRepositories(query, page))
   handle('spindle:github:repository', (owner: string, name: string) => github.repository(owner, name))
