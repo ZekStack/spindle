@@ -102,6 +102,20 @@ test('pull checks local changes and protects files; dirty/detached checkouts can
     await syncCheckout(store, repo, 'fetch', clean, () => {})
     git('-C', checkout, 'branch', '--set-upstream-to=origin/main', 'main')
 
+    git('-C', checkout, 'checkout', '-q', '-b', 'feature')
+    git('-C', checkout, 'branch', '--set-upstream-to=origin/main', 'feature')
+    assert.equal((await pullReadiness(store, repo, clean)).reason, 'upstream-mismatch')
+    await syncCheckout(store, repo, 'fetch', clean, () => {})
+    git('-C', checkout, 'checkout', '-q', 'main')
+
+    git('-C', checkout, 'remote', 'set-url', 'origin',
+      'https://github.com/AnotherOrg/different.git')
+    assert.equal((await pullReadiness(store, repo, clean)).reason, 'origin-mismatch')
+    await assert.rejects(syncCheckout(store, repo, 'fetch', clean, () => {}),
+      (error: unknown) => error instanceof GitSafetyError && error.code === 'origin-mismatch')
+    git('-C', checkout, 'remote', 'set-url', 'origin',
+      'https://github.com/ExampleOrg/project.git')
+
     const head = git('-C', checkout, 'rev-parse', 'HEAD')
     writeFileSync(join(checkout, '.git', 'MERGE_HEAD'), head + '\n')
     assert.equal((await pullReadiness(store, repo, clean)).reason, 'operation-in-progress')
