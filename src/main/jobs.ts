@@ -11,6 +11,8 @@ import { validGitInspection } from '../shared/git-inspection'
 import type { LocalWorkspaceStore } from './local-workspaces'
 import { activeJob, validateJobId, type JobErrorCode, type JobRecord } from '../shared/jobs'
 import type { GitHubClient } from './github'
+import { listGitTags, mutateGitTag, TagLifecycleError } from './git-tags'
+import { validateTagMutation, type GitTagsSnapshot, type TagMutationRequest } from '../shared/tags'
 
 type Inspector = Pick<GitHubClient, 'repository' | 'releases' | 'workflowRuns'>
 type Listener = (jobs: JobRecord[]) => void
@@ -21,6 +23,7 @@ const DEADLINE_MS = 45_000
 
 function copy(job: JobRecord): JobRecord {
   return { ...job, output: [...job.output],
+    ...(job.tagOperation ? { tagOperation: { ...job.tagOperation } } : {}),
     ...(job.inspection ? { inspection: { ...job.inspection,
       localTags: { ...job.inspection.localTags, names: [...job.inspection.localTags.names] },
       remoteTags: { ...job.inspection.remoteTags, names: [...job.inspection.remoteTags.names] }
@@ -36,16 +39,27 @@ function codeFor(error: unknown): JobErrorCode {
   if (message.includes('timeout') || message.includes('timed out')) return 'timeout'
   return 'unknown'
 }
+function validStoredTagOperation(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  if (Object.hasOwn(record, 'message')) return false
+  try {
+    // Annotated messages are only retained in volatile main-process memory.
+    validateTagMutation(record.action === 'create' && record.mode === 'annotated'
+      ? { ...record, message: 'message omitted from history' } : record)
+    return true
+  } catch { return false }
+}
 function validHistory(raw: unknown): raw is JobRecord[] {
   return Array.isArray(raw) && raw.length <= MAX_HISTORY && raw.every((job) =>
     job && typeof job === 'object' && typeof job.id === 'string' &&
     typeof job.repository === 'string' && job.repository.length <= 220 &&
     (job.kind === 'repository-inspection' ||
-      (['local-git-inspection', 'local-git-clone', 'local-git-fetch', 'local-git-pull'].includes(job.kind) &&
+      (['local-git-inspection', 'local-git-clone', 'local-git-fetch', 'local-git-pull', 'local-git-tag'].includes(job.kind) &&
         typeof job.location === 'string' &&
         job.location.length > 0 && job.location.length <= 2048 &&
         isAbsolute(job.location) && !job.location.includes('\0'))) &&
-    job.action === (job.kind === 'local-git-clone' ? 'clone'
+    job.action === (job.kind === 'local-git-tag' ? 'tag' : job.kind === 'local-git-clone' ? 'clone'
       : job.kind === 'local-git-fetch' ? 'fetch'
         : job.kind === 'local-git-pull' ? 'pull' : 'inspect') &&
     ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
@@ -57,13 +71,16 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     job.output.every((line: unknown) => typeof line === 'string' && line.length <= 160) &&
     (job.errorCode === null || ['auth', 'forbidden', 'not-found', 'rate-limit',
       'network', 'timeout', 'interrupted', 'git-unavailable', 'git-failed',
-      'output-limit', 'unknown', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
+      'output-limit', 'unknown', 'tag-stale', 'tag-exists', 'tag-missing', 'tag-partial', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
     (job.retryable === undefined || typeof job.retryable === 'boolean') &&
     (job.linkedRepository === undefined ||
       (job.kind === 'local-git-inspection' && typeof job.linkedRepository === 'string' &&
        /^[a-zA-Z0-9-]{1,39}\/[a-zA-Z0-9_.-]{1,100}$/.test(job.linkedRepository))) &&
     (job.inspection === undefined ||
-      (job.kind === 'local-git-inspection' && validGitInspection(job.inspection))))
+      (job.kind === 'local-git-inspection' && validGitInspection(job.inspection))) &&
+    (job.kind === 'local-git-tag'
+      ? validStoredTagOperation(job.tagOperation) && typeof job.tagRemoteDeleted === 'boolean'
+      : job.tagOperation === undefined && job.tagRemoteDeleted === undefined))
 }
 
 /**
@@ -78,6 +95,7 @@ export class JobManager {
   private listeners = new Set<Listener>()
   private healthy = true
   private scheduled = false
+  private readonly pendingTagMessages = new Map<string, string>()
 
   constructor(private readonly file: string, private readonly github: Inspector,
     private readonly local?: LocalWorkspaceStore) {
@@ -90,11 +108,13 @@ export class JobManager {
       let changed = false
       for (const job of this.history) {
         if (!activeJob(job.phase)) continue
-        job.phase = 'interrupted'
+        job.phase = job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'partial' : 'interrupted'
         job.finishedAt = new Date().toISOString()
-        job.errorCode = 'interrupted'
-        job.retryable = job.kind !== 'local-git-clone'
-        job.output.push('Interrupted by application restart.')
+        job.errorCode = job.kind === 'local-git-tag' ? 'tag-partial' : 'interrupted'
+        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag'
+        job.output.push(job.kind === 'local-git-tag'
+          ? 'Interrupted tag operation; refresh local and origin tags before retrying.'
+          : 'Interrupted by application restart.')
         changed = true
       }
       if (changed) this.persist()
@@ -230,6 +250,47 @@ export class JobManager {
       this.local.pathFor(repository))
   }
 
+  /** Live tag state is advisory and never authorizes a later remote mutation. */
+  async tags(ownerValue: string, nameValue: string): Promise<GitTagsSnapshot> {
+    this.list()
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    if (!this.local) throw new Error('Local workspace storage is not configured')
+    if (this.history.some(item => activeJob(item.phase) && isLocal(item.kind) &&
+      item.repository.toLowerCase() === repository.toLowerCase())) {
+      throw new Error('Wait for the current local Git operation before refreshing tags')
+    }
+    return listGitTags(this.local, repository, AbortSignal.timeout(25_000))
+  }
+
+  /** The annotation text is never added to history or streamed to the UI. */
+  mutateTag(ownerValue: string, nameValue: string, raw: TagMutationRequest): JobRecord {
+    this.list()
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    if (!this.local) throw new Error('Local workspace storage is not configured')
+    const request = validateTagMutation(raw)
+    if (this.history.some(item => activeJob(item.phase) && isLocal(item.kind) &&
+      item.repository.toLowerCase() === repository.toLowerCase())) {
+      throw new Error('A local Git operation is already running for this repository')
+    }
+    if (this.history.filter(item => activeJob(item.phase)).length >= 20) {
+      throw new Error('Activity queue is full')
+    }
+    const { message, ...operation } = request
+    const record: JobRecord = {
+      id: randomUUID(), kind: 'local-git-tag', action: 'tag', repository,
+      location: this.local.pathFor(repository), tagOperation: operation, tagRemoteDeleted: false,
+      requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
+      phase: 'queued', progress: 0, output: ['Tag operation queued.'],
+      errorCode: null, retryable: false
+    }
+    if (message) this.pendingTagMessages.set(record.id, message)
+    this.history.unshift(record)
+    this.history = this.history.slice(0, MAX_HISTORY)
+    this.publish()
+    this.schedule()
+    return copy(record)
+  }
+
   /** Advises the renderer, never authorizes a future write operation. */
   async previewPull(ownerValue: string, nameValue: string): Promise<PullReadiness> {
     this.list()
@@ -250,7 +311,13 @@ export class JobManager {
     if (!job) throw new Error('Job not found')
     if (!activeJob(job.phase)) return copy(job)
     this.controllers.get(id)?.abort()
-    this.finish(job, 'cancelled', null, 'Cancelled by user.')
+    this.pendingTagMessages.delete(id)
+    if (job.kind === 'local-git-tag' && job.phase === 'running') {
+      this.finish(job, 'partial', 'tag-partial',
+        'Tag operation interrupted. Refresh both locations; a remote mutation may have completed.')
+    } else {
+      this.finish(job, 'cancelled', null, 'Cancelled by user.')
+    }
     this.schedule()
     return copy(job)
   }
@@ -297,12 +364,28 @@ export class JobManager {
         const report = (message: string, percent: number) => this.line(job, message, percent)
         if (job.kind === 'local-git-clone') {
           await cloneCheckout(this.local, job.repository, job.location, controller.signal, report)
+        } else if (job.kind === 'local-git-tag') {
+          if (!job.tagOperation) throw new Error('Missing tag operation')
+          // Do not retarget a queued mutation if the user relinked the repo.
+          if (this.local.pathFor(job.repository) !== job.location) {
+            throw new GitSafetyError('checkout-moved',
+              'Linked checkout changed since the tag job was queued.')
+          }
+          const message = this.pendingTagMessages.get(job.id)
+          await mutateGitTag(this.local, job.repository,
+            { ...job.tagOperation, ...(message ? { message } : {}) },
+            controller.signal, report, () => {
+              job.tagRemoteDeleted = true
+              this.publish()
+            })
         } else {
           await syncCheckout(this.local, job.repository, job.action as SyncOperation,
             controller.signal, report)
         }
         if (controller.signal.aborted) return
-        this.finish(job, 'completed', null, `Git ${job.action} completed.`)
+        this.finish(job, 'completed', null, job.kind === 'local-git-tag'
+          ? 'Confirmed tag action completed. Refresh tag inventory.'
+          : `Git ${job.action} completed.`)
       } else {
         await this.github.repository(owner, name, controller.signal)
         if (controller.signal.aborted) return
@@ -322,13 +405,20 @@ export class JobManager {
           : error.reason === 'output-limit' ? 'output-limit' : 'git-failed'
         : null
       const code = timedOut ? 'timeout'
-        : error instanceof GitSafetyError ? error.code : gitFailure ?? codeFor(error)
+        : error instanceof TagLifecycleError ? error.code
+          : error instanceof GitSafetyError ? error.code : gitFailure ?? codeFor(error)
       // Progress can reflect useful completed steps even when a subsequent
       // GitHub or local Git request fails; never report false full success.
       const hasPartialResult = job.kind === 'repository-inspection'
         ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-      this.finish(job, hasPartialResult ? 'partial' : 'failed', code,
-        timedOut ? 'Operation timed out.'
+      this.finish(job, job.kind === 'local-git-tag' && job.tagRemoteDeleted
+        ? 'partial' : hasPartialResult ? 'partial' : 'failed',
+        job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'tag-partial' : code,
+        job.kind === 'local-git-tag' && job.tagRemoteDeleted
+          ? 'Origin deletion succeeded; local deletion may remain. Refresh both before continuing.'
+          : job.kind === 'local-git-tag'
+            ? 'Tag operation could not finish; refresh local and origin tags before retrying.'
+          : timedOut ? 'Operation timed out.'
           : code === 'git-unavailable' ? 'Git executable was not found.'
             : code === 'output-limit' ? 'Git output exceeded the safe limit.'
               : isLocal(job.kind)
@@ -339,9 +429,13 @@ export class JobManager {
       if (timedOut && activeJob(job.phase)) {
         const partial = job.kind === 'repository-inspection'
           ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-        this.finish(job, partial ? 'partial' : 'failed', 'timeout', 'Operation timed out.')
+        this.finish(job, job.kind === 'local-git-tag' && job.tagRemoteDeleted
+          ? 'partial' : partial ? 'partial' : 'failed',
+          job.kind === 'local-git-tag' ? 'tag-partial' : 'timeout',
+          job.kind === 'local-git-tag' ? 'Tag state uncertain; refresh both locations.' : 'Operation timed out.')
       }
       this.controllers.delete(job.id)
+      this.pendingTagMessages.delete(job.id)
       this.schedule()
     }
   }

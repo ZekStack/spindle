@@ -1,12 +1,14 @@
 import type { LocalGitInspection } from './git-inspection'
 import type { GitSafetyCode } from './git-safety'
+import type { TagMutationRequest } from './tags'
 
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection' |
-  'local-git-clone' | 'local-git-fetch' | 'local-git-pull'
+  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag'
 export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
 export type JobErrorCode = GitSafetyCode | 'forbidden' | 'not-found' | 'rate-limit' |
-  'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' | 'unknown'
+  'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' |
+  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'unknown'
 
 export interface JobRecord {
   id: string
@@ -18,7 +20,11 @@ export interface JobRecord {
   linkedRepository?: string
   /** Snapshot contains bounded counts and sanitized refs, never filenames or raw URLs. */
   inspection?: LocalGitInspection
-  action: 'inspect' | 'clone' | 'fetch' | 'pull'
+  /** Only the confirmed ref preconditions, never an annotation message, are persisted. */
+  tagOperation?: Omit<TagMutationRequest, 'message'>
+  /** Durable partial-success flag for combined remote-first deletion. */
+  tagRemoteDeleted?: boolean
+  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag'
   requestedAt: string
   startedAt: string | null
   finishedAt: string | null

@@ -8,6 +8,7 @@ import type { PullReadiness } from '../../../shared/git-safety'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { LinkedInspection } from './linked-inspection'
+import { GitTagManager } from './git-tag-manager'
 
 const KEY = ['local-workspaces'] as const
 
@@ -201,6 +202,7 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
         </Button>
       </div>
       <LinkedInspection key={linked.path} owner={owner} name={name} path={linked.path}/>
+      <GitTagManager key={`tags-${linked.path}`} owner={owner} name={name} path={linked.path}/>
     </> : <p className="mt-3 text-sm text-[var(--muted)]">{t('localNoCheckout')}</p>}
     <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
       <DialogContent>
