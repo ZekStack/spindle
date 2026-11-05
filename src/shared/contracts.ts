@@ -1,3 +1,4 @@
+import type { PullReadiness } from './git-safety'
 // The renderer knows only these data shapes and the methods exposed by preload.
 // No filesystem, Node, shell, credentials, or general-purpose IPC access.
 import type { UpdateStatus } from './update-policy'
@@ -115,6 +116,7 @@ export interface SpindleApi {
   inspectLinkedRepository(owner: string, name: string): Promise<JobRecord>
   cloneRepository(owner: string, name: string, savedRoot: string): Promise<JobRecord>
   syncLinkedRepository(owner: string, name: string, operation: 'fetch' | 'pull'): Promise<JobRecord>
+  previewLinkedPull(owner: string, name: string): Promise<PullReadiness>
   addOrganization(login: string): Promise<Workspace>
   removeOrganization(login: string): Promise<Workspace>
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>
