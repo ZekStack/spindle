@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { Activity, GitBranch, Globe2, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './components/ui/button'
 import { AddOrganization } from './components/add-organization'
 import { UpdateDialog } from './components/update-dialog'
+import { AccountIdentity } from './components/account-identity'
 
 type Theme = 'dark' | 'light'
 function initialTheme(): Theme {
@@ -14,7 +14,6 @@ function initialTheme(): Theme {
 export function Shell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const { t, i18n } = useTranslation()
-  const session = useQuery({ queryKey: ['auth'], queryFn: () => window.spindle.getAuthStatus(), staleTime: 60_000 })
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     localStorage.setItem('spindle.theme', theme)
@@ -37,11 +36,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </Link>
         <div className="flex items-center gap-2">
-          <div className="mr-2 hidden items-center gap-2 text-xs text-[var(--muted)] md:flex">
-            <span className={`size-1.5 rounded-full ${session.data?.method === 'anonymous' ? 'bg-amber-400' : 'bg-emerald-400'}`}/>
-            {session.data?.method === 'github-cli' ? t('authenticated') :
-             session.data?.method === 'environment' ? t('environment') : t('anonymous')}
-          </div>
+          <AccountIdentity/>
           <AddOrganization compact />
           <UpdateDialog/>
           <Button variant="ghost" size="icon" title={t('language')} aria-label={t('language')} onClick={switchLanguage}>
