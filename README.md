@@ -83,6 +83,24 @@ errors in English and Hungarian. On a public/anonymous account,
 the **Your GitHub organizations** list requires signing in, but public
 organization search and public repositories remain available.
 
+## Activity and background operations
+
+Open a repository and choose **Inspect in Activity** to run a real
+read-only inspection of its GitHub metadata, recent releases and workflow
+runs. The operation lives in Electron main and continues while the Activity
+dialog is closed. The header Activity indicator shows running jobs; its
+dialog supports running/history filters, progress, safe output, cancellation
+and repeating an inspection. Up to two inspections run concurrently.
+
+A compact history of up to 100 operations is stored in
+`activity-history.json` in Electron user data, independently of workspace
+preferences. Jobs still running when the app quits are marked
+**Interrupted** when it restarts; they are not falsely marked successful.
+Only safe progress summaries are persisted, never GitHub tokens or raw API
+response bodies. The initial feature is read-only; future Git clone/fetch/
+pull operations will use the same main-process activity model once the M2.2
+child-process scheduler is implemented.
+
 ## Architecture and security
 
 ```text
