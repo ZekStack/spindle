@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GitHubClient } from './github'
 import { WorkspaceStore } from './store'
+import { LocalWorkspaceStore } from './local-workspaces'
 import { JobManager } from './jobs'
 import { UpdateManager } from './updater'
 import { verifyRunningDebPackage } from './deb-preflight'
@@ -39,7 +40,8 @@ function createWindow(): void {
   jobs ??= new JobManager(join(app.getPath('userData'), 'activity-history.json'), github)
   registerIpc(mainWindow,
     new WorkspaceStore(join(app.getPath('userData'), 'workspace.json')),
-    github, updater, jobs)
+    github, updater, jobs,
+    new LocalWorkspaceStore(join(app.getPath('userData'), 'local-workspaces.json')))
   mainWindow.once('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try { void shell.openExternal(parseGitHubUrl(url)) } catch { /* Reject external URLs */ }
