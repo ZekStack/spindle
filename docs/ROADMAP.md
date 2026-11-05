@@ -267,6 +267,21 @@ state after a process restart.
       Do not mark this slice complete until these platform gates pass.
 - [ ] **M3.3 — Inspection.** Branch, commit, ahead/behind, dirty working
       tree, staged/untracked changes and local/remote tag inventory.
+      Engineering work: [x] bounded local Git snapshot in the existing
+      cancellable Activity job, persisted without raw filenames, Git stderr
+      or remote URLs; [x] branch/HEAD SHA and upstream divergence with explicit
+      no-upstream and detached/unborn states; [x] NUL-delimited porcelain
+      parsing for staged, modified, untracked, renamed and conflicted files;
+      [x] local tag inventory and live remote tag inventory for verified linked
+      GitHub origins only (distinguishing unavailable from empty remote);
+      [x] structured repository overview and Activity details with HU/EN
+      text, totals, 40-tag display cap and explicit refresh; [x] synthetic
+      read-only Git inspection tests on Linux/Windows CI.
+      **Remaining acceptance:** installed Linux Mint and Windows checkouts,
+      private remote access, offline/large tag lists, detached HEAD and
+      branch divergence QA. Counts reflect the last local and remote-tracking
+      refs; inspection does not implicitly fetch, and the remote tag query
+      does not update those refs.
 - [ ] **M3.4 — Safety.** Refuse destructive operations when the worktree
       is dirty unless the user explicitly chooses a supported safe action.
       Handle detached HEAD, conflicts, authentication and network failures.

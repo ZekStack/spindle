@@ -1,3 +1,5 @@
+import type { LocalGitInspection } from './git-inspection'
+
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection' |
   'local-git-clone' | 'local-git-fetch' | 'local-git-pull'
@@ -11,6 +13,10 @@ export interface JobRecord {
   repository: string
   /** Canonical folder selected using Electron's native picker; local jobs only. */
   location?: string
+  /** Only linked inspections can request remote tag metadata. */
+  linkedRepository?: string
+  /** Snapshot contains bounded counts and sanitized refs, never filenames or raw URLs. */
+  inspection?: LocalGitInspection
   action: 'inspect' | 'clone' | 'fetch' | 'pull'
   requestedAt: string
   startedAt: string | null
