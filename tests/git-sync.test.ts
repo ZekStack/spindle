@@ -51,7 +51,9 @@ test('clone and sync use saved roots, validated GitHub origins, and ff-only pull
 
     const store = new LocalWorkspaceStore(join(root, 'locations.json'))
     store.addRootFromPicker(root)
-    const target = store.cloneDestination('ExampleOrg/project', root)
+    // The native picker store canonicalizes Windows 8.3 and long-path aliases.
+    const savedRoot = store.load().roots[0]
+    const target = store.cloneDestination('ExampleOrg/project', savedRoot)
     const events: string[] = []
     await cloneCheckout(store, 'ExampleOrg/project', target, new AbortController().signal,
       (message) => events.push(message))
