@@ -267,7 +267,9 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
           <Button variant="secondary" disabled={busy} onClick={() => setPullOpen(false)}>
             {t('localCancel')}
           </Button>
-          {pullPreview && !pullPreview.ready && pullPreview.reason !== 'operation-in-progress' &&
+          {pullPreview && !pullPreview.ready && !!pullPreview.reason &&
+            ['dirty-worktree', 'conflicted', 'detached-head', 'upstream-missing',
+              'upstream-mismatch', 'diverged'].includes(pullPreview.reason) &&
             <Button variant="secondary" disabled={busy} onClick={() =>
               void startJob(() => window.spindle.syncLinkedRepository(owner, name, 'fetch'))}>
               <Download className="size-3.5"/>{t('localPullSafetyFetchOnly')}
