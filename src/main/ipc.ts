@@ -5,10 +5,11 @@ import { GitHubClient } from './github'
 import { githubDeviceAuth } from './device-auth'
 import { managedGitHubToken } from './managed-token'
 import { WorkspaceStore } from './store'
+import { JobManager } from './jobs'
 import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
 
-export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github: GitHubClient, updates: UpdateManager): void {
+export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github: GitHubClient, updates: UpdateManager, jobs: JobManager): void {
   function allow(event: IpcMainInvokeEvent): void {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
       throw new Error('Untrusted IPC sender')
@@ -36,6 +37,15 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     })
   }
 
+  handle('spindle:jobs:list', () => jobs.list())
+  handle('spindle:jobs:inspect', (owner: string, name: string) => jobs.inspect(owner, name))
+  handle('spindle:jobs:cancel', (id: string) => jobs.cancel(id))
+  const removeJobsListener = jobs.subscribe((items) => {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      window.webContents.send('spindle:jobs:changed', items)
+    }
+  })
+  window.once('closed', removeJobsListener)
   handle('spindle:workspace:get', () => store.load())
   handle('spindle:workspace:add-org', async (login: string) => {
     const org = await github.organization(validateLogin(login))
