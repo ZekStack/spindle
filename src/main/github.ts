@@ -73,7 +73,7 @@ export class GitHubClient {
         login?: unknown; name?: unknown; avatar_url?: unknown
       }
       if (typeof viewer.login !== 'string' ||
-          ) {
+          !LOGIN_PATTERN.test(viewer.login)) {
         return state('unavailable')
       }
       const avatar = typeof viewer.avatar_url === 'string' &&
