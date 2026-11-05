@@ -51,7 +51,7 @@ jobs:
         run: pnpm build
       - name: Package Linux (.deb and AppImage)
         if: runner.os == 'Linux'
-        run: pnpm exec electron-builder --linux AppImage deb --x64 --publish never
+        run: bash ./scripts/retry-electron-builder.sh --linux AppImage deb --x64 --publish never
       - name: Package Windows (.exe)
         if: runner.os == 'Windows'
         run: pnpm exec electron-builder --win nsis --x64 --publish never
@@ -96,7 +96,7 @@ jobs:
           set -euo pipefail
           node scripts/prepare-release.mjs --prepare v0.1.0-rc.9000
           pnpm build
-          pnpm exec electron-builder --linux deb --x64 --publish never
+          bash ./scripts/retry-electron-builder.sh --linux deb --x64 --publish never
           cp release/Spindle-0.1.0-rc.9000-linux-x64.deb "$RUNNER_TEMP/"
       - name: Install older RC and verify running package
         shell: bash
@@ -113,7 +113,7 @@ jobs:
           set -euo pipefail
           node scripts/prepare-release.mjs --prepare v0.1.0-rc.9001
           pnpm build
-          pnpm exec electron-builder --linux deb --x64 --publish never
+          bash ./scripts/retry-electron-builder.sh --linux deb --x64 --publish never
           test -f release/Spindle-0.1.0-rc.9001-linux-x64.deb
       - name: Test denied elevation and real verified Debian upgrade
         env:
@@ -189,7 +189,7 @@ jobs:
           set -euo pipefail
           node scripts/prepare-release.mjs --prepare v0.1.0-rc.9000
           pnpm build
-          bash ./scripts/retry-appimage-build.sh
+          bash ./scripts/retry-electron-builder.sh --linux AppImage --x64 --publish never
           mkdir -p "$RUNNER_TEMP/spindle-appimage-integration"
           cp release/Spindle-0.1.0-rc.9000-linux-x64.AppImage "$RUNNER_TEMP/spindle-appimage-integration/"
       - name: Build the newer unpublished AppImage
@@ -198,7 +198,7 @@ jobs:
           set -euo pipefail
           node scripts/prepare-release.mjs --prepare v0.1.0-rc.9001
           pnpm build
-          bash ./scripts/retry-appimage-build.sh
+          bash ./scripts/retry-electron-builder.sh --linux AppImage --x64 --publish never
           test -f release/Spindle-0.1.0-rc.9001-linux-x64.AppImage
       - name: Verify real AppImage runtime and portable version replacement
         shell: bash
@@ -226,7 +226,7 @@ jobs:
           set -euo pipefail
           node scripts/prepare-release.mjs --prepare v0.1.0-rc.0
           pnpm build
-          pnpm exec electron-builder --linux deb --x64 --publish never
+          bash ./scripts/retry-electron-builder.sh --linux deb --x64 --publish never
           test -f release/Spindle-0.1.0-rc.0-linux-x64.deb
       - name: Install and exercise real public GitHub DEB update check and download
         shell: bash
