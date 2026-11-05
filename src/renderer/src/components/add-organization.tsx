@@ -12,13 +12,21 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
   const [value, setValue] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(1)
+  const [availablePage, setAvailablePage] = useState(1)
+  const [view, setView] = useState<'mine' | 'search'>('mine')
   const navigate = useNavigate()
   const cache = useQueryClient()
   const { t } = useTranslation()
+  const available = useQuery({
+    queryKey: ['my-organizations', availablePage],
+    queryFn: () => window.spindle.listAccessibleOrganizations(availablePage),
+    enabled: open && view === 'mine', staleTime: 60_000
+  })
+  const workspace = useQuery({ queryKey: ['workspace'], queryFn: () => window.spindle.getWorkspace() })
   const suggestions = useQuery({
     queryKey: ['organization-search', searchTerm, page],
     queryFn: () => window.spindle.searchOrganizations(searchTerm, page),
-    enabled: open && searchTerm.length >= 2,
+    enabled: open && view === 'search' && searchTerm.length >= 2,
     staleTime: 30_000
   })
   const mutation = useMutation({
@@ -36,9 +44,15 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
   }
   return <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (next) mutation.reset() }}>
     <Button size={compact ? 'sm' : 'default'} onClick={() => setOpen(true)}><Plus className="size-4"/>{t('addOrganization')}</Button>
-    <DialogContent>
+    <DialogContent className="max-h-[88vh] overflow-y-auto">
       <DialogTitle className="text-xl font-semibold">{t('addOrganization')}</DialogTitle>
       <DialogDescription className="mt-2 text-sm text-[var(--muted)]">{t('orgDialogDetails')}</DialogDescription>
+      <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t('organizationDiscovery')}>
+        <Button variant={view === 'mine' ? 'default' : 'secondary'} size="sm"
+          onClick={() => setView('mine')}>{t('yourAccessibleOrganizations')}</Button>
+        <Button variant={view === 'search' ? 'default' : 'secondary'} size="sm"
+          onClick={() => setView('search')}>{t('searchOrganizations')}</Button>
+      </div>
       <form onSubmit={submit} className="mt-6 flex flex-col gap-4">
         <label className="flex flex-col gap-2 text-sm font-medium">
           {t('orgName')}
@@ -53,6 +67,7 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
           <Button variant="secondary" disabled={value.trim().length < 2}
             onClick={() => {
               setPage(1)
+              setView('search')
               setSearchTerm(value.trim())
             }}>
             <Search className="size-4"/>{t('searchOrganizations')}
@@ -60,15 +75,15 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
           <Button variant="secondary" onClick={() => setOpen(false)}>{t('cancel')}</Button>
           <Button type="submit" disabled={!value.trim() || mutation.isPending}>{t('add')}</Button>
         </div>
-        {searchTerm && <section className="border-t border-[var(--border)] pt-4">
+        {view === 'search' && searchTerm && <section className="border-t border-[var(--border)] pt-4">
           <h3 className="mb-2 text-sm font-semibold">{t('organizationSearchResults')}</h3>
           {suggestions.isPending && <p className="text-sm text-[var(--muted)]">{t('loading')}</p>}
           {suggestions.isError && <p role="alert" className="text-sm text-red-400">
             {t('organizationSearchError')}
           </p>}
-          {suggestions.data?.length === 0 && <p className="text-sm text-[var(--muted)]">{t('noOrganizationsFound')}</p>}
+          {suggestions.data?.items.length === 0 && <p className="text-sm text-[var(--muted)]">{t('noOrganizationsFound')}</p>}
           <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
-            {suggestions.data?.map((org) => <div key={org.login} className="flex items-center gap-2 px-3 py-2">
+            {suggestions.data?.items.map((org) => <div key={org.login} className="flex items-center gap-2 px-3 py-2">
               <Building2 className="size-4 shrink-0 text-orange-500"/>
               <span className="min-w-0 flex-1 truncate text-sm">{org.login}</span>
               <Button size="sm" variant="secondary" disabled={mutation.isPending}
@@ -80,11 +95,40 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
               {t('previous')}
             </Button>
             <span className="text-xs text-[var(--muted)]">{page}</span>
-            <Button size="sm" variant="ghost" disabled={suggestions.data.length < 20}
+            <Button size="sm" variant="ghost" disabled={!suggestions.data.hasNext}
               onClick={() => setPage(p => p + 1)}>{t('showMore')}</Button>
           </div>}
         </section>}
       </form>
+      {view === 'mine' && <section className="mt-4 border-t border-[var(--border)] pt-4">
+        <h3 className="mb-2 text-sm font-semibold">{t('yourAccessibleOrganizations')}</h3>
+        {available.isPending && <p className="text-sm text-[var(--muted)]">{t('loading')}</p>}
+        {available.isError && <p role="alert" className="text-sm text-red-400">
+          {errorMessage(available.error)}
+        </p>}
+        {available.data?.items.length === 0 && <p className="text-sm text-[var(--muted)]">
+          {t('noAccessibleOrganizations')}
+        </p>}
+        {available.data && <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+          {available.data.items.map((org) => {
+            const added = workspace.data?.organizations.some((saved) =>
+              saved.toLowerCase() === org.login.toLowerCase())
+            return <div key={org.login} className="flex items-center gap-2 px-3 py-2">
+              <Building2 className="size-4 shrink-0 text-orange-500"/>
+              <span className="min-w-0 flex-1 truncate text-sm">{org.login}</span>
+              <Button size="sm" variant="secondary" disabled={mutation.isPending || added}
+                onClick={() => mutation.mutate(org.login)}>{added ? t('selected') : t('add')}</Button>
+            </div>
+          })}
+        </div>}
+        {available.data && <div className="mt-2 flex items-center justify-between">
+          <Button size="sm" variant="ghost" disabled={availablePage <= 1}
+            onClick={() => setAvailablePage(p => p - 1)}>{t('previous')}</Button>
+          <span className="text-xs text-[var(--muted)]">{t('pageNumber', { page: availablePage })}</span>
+          <Button size="sm" variant="ghost" disabled={!available.data.hasNext}
+            onClick={() => setAvailablePage(p => p + 1)}>{t('showMore')}</Button>
+        </div>}
+      </section>}
     </DialogContent>
   </Dialog>
 }
