@@ -3,7 +3,9 @@ import { promisify } from 'node:util'
 import { managedGitHubToken } from './managed-token'
 import {
   LOGIN_PATTERN, validateLogin, validatePage, validateRepository, validateRepositorySearch,
-  type AuthStatus, type GitHubIdentity, type Organization, type Release, type Repository, type WorkflowRun
+  validateOrganizationSearch,
+  type AuthStatus, type GitHubIdentity, type Organization, type OrganizationSuggestion,
+  type Release, type Repository, type WorkflowRun
 } from '../shared/contracts'
 
 const execFileAsync = promisify(execFile)
@@ -139,6 +141,17 @@ export class GitHubClient {
     return { login: org.login, name: org.name, avatarUrl: org.avatar_url,
       description: org.description, htmlUrl: org.html_url, publicRepos: org.public_repos }
   }
+  async searchOrganizations(queryValue: string, pageValue: number): Promise<OrganizationSuggestion[]> {
+    const query = validateOrganizationSearch(queryValue)
+    const page = validatePage(pageValue)
+    const q = encodeURIComponent(`${query} in:login type:org`)
+    const response = await this.request<{ items: Array<{ login: string; avatar_url: string | null }> }>(
+      `/search/users?q=${q}&per_page=20&page=${page}`
+    )
+    return response.items.filter((item) => LOGIN_PATTERN.test(item.login))
+      .map((item) => ({ login: item.login, avatarUrl: item.avatar_url }))
+  }
+
   async repositories(value: string, pageValue: number): Promise<Repository[]> {
     const org = validateLogin(value)
     const page = validatePage(pageValue)
