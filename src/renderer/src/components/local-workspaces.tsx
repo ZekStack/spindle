@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, Download, FolderGit2, FolderOpen, Link2, RotateCcw, Trash2, Unlink } from 'lucide-react'
+import { ArrowDown, Download, FolderGit2, FolderOpen, Link2, Trash2, Unlink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { LocalWorkspace } from '../../../shared/contracts'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
+import { LinkedInspection } from './linked-inspection'
 
 const KEY = ['local-workspaces'] as const
 
@@ -142,14 +143,7 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
     } catch { setError(true) }
     finally { setBusy(false) }
   }
-  async function inspect() {
-    setBusy(true); setError(false)
-    try {
-      await window.spindle.inspectLinkedRepository(owner, name)
-      window.dispatchEvent(new Event('spindle:activity:open'))
-    } catch { setError(true) }
-    finally { setBusy(false) }
-  }
+
   return <div className="panel p-5 sm:col-span-2">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
@@ -179,9 +173,6 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
     {linked ? <>
       <p className="mt-4 break-all text-sm text-[var(--muted)]">{linked.path}</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="secondary" size="sm" disabled={busy} onClick={() => void inspect()}>
-          <RotateCcw className="size-3.5"/>{t('activityInspectLocal')}
-        </Button>
         <Button variant="secondary" size="sm" disabled={busy}
           onClick={() => void startJob(() => window.spindle.syncLinkedRepository(owner, name, 'fetch'))}>
           <Download className="size-3.5"/>{t('localFetch')}
@@ -193,6 +184,7 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
           <Unlink className="size-3.5"/>{t('localUnlink')}
         </Button>
       </div>
+      <LinkedInspection key={linked.path} owner={owner} name={name} path={linked.path}/>
     </> : <p className="mt-3 text-sm text-[var(--muted)]">{t('localNoCheckout')}</p>}
     <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
       <DialogContent>
