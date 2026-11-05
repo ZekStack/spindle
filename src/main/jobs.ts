@@ -23,6 +23,7 @@ const DEADLINE_MS = 45_000
 
 function copy(job: JobRecord): JobRecord {
   return { ...job, output: [...job.output],
+    ...(job.tagOperation ? { tagOperation: { ...job.tagOperation } } : {}),
     ...(job.inspection ? { inspection: { ...job.inspection,
       localTags: { ...job.inspection.localTags, names: [...job.inspection.localTags.names] },
       remoteTags: { ...job.inspection.remoteTags, names: [...job.inspection.remoteTags.names] }
@@ -365,6 +366,11 @@ export class JobManager {
           await cloneCheckout(this.local, job.repository, job.location, controller.signal, report)
         } else if (job.kind === 'local-git-tag') {
           if (!job.tagOperation) throw new Error('Missing tag operation')
+          // Do not retarget a queued mutation if the user relinked the repo.
+          if (this.local.pathFor(job.repository) !== job.location) {
+            throw new GitSafetyError('checkout-moved',
+              'Linked checkout changed since the tag job was queued.')
+          }
           const message = this.pendingTagMessages.get(job.id)
           await mutateGitTag(this.local, job.repository,
             { ...job.tagOperation, ...(message ? { message } : {}) },
