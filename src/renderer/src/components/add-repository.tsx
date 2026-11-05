@@ -16,6 +16,7 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [invalidPath, setInvalidPath] = useState(false)
   const search = useQuery({
     queryKey: ['repository-search', query, page],
     queryFn: () => window.spindle.searchRepositories(query, page),
@@ -36,14 +37,13 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
     event.preventDefault()
     const value = input.trim()
     if (!value) return
+    setInvalidPath(false)
     if (value.includes('/')) {
       try {
         const parts = parseRepositoryFullName(value)
         mutation.mutate(parts)
       } catch {
-        mutation.reset()
-        setQuery('')
-        setPage(1)
+        setInvalidPath(true)
       }
       return
     }
@@ -77,7 +77,10 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
       <form onSubmit={submit} className="mt-5 flex flex-col gap-2 sm:flex-row">
         <label className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"/>
-          <input autoFocus value={input} onChange={(e) => setInput(e.target.value)}
+          <input autoFocus value={input} onChange={(e) => {
+            setInput(e.target.value)
+            setInvalidPath(false)
+          }}
             maxLength={100} placeholder={t('repositorySearchPlaceholder')}
             aria-label={t('repositorySearchPlaceholder')}
             className="field h-10 w-full pl-9 text-sm"/>
@@ -87,6 +90,7 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
         </Button>
       </form>
       <p className="mt-2 text-xs text-[var(--muted)]">{t('repositorySearchHint')}</p>
+      {invalidPath && <p role="alert" className="mt-3 text-sm text-red-400">{t('repositoryInvalidPath')}</p>}
       {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-400">{errorMessage(mutation.error)}</p>}
       {mutation.isSuccess && <p role="status" className="mt-3 text-sm text-emerald-400">
         {t('repositoryAdded')}
