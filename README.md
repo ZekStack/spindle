@@ -105,8 +105,19 @@ untracked counts, and supports cancellation and retry. Jobs use argument-
 array child processes with bounded output, no shell or credential prompts.
 Git filenames, remotes and process error text are never put in Activity
 history. The selected local directory is retained in the private Activity
-history for retry; persistent workspace roots and repository associations
-are planned for M3.1. Clone/fetch/pull remain unimplemented.
+history for retry. Git subprocesses are terminated on cancellation, with
+a forced stop after a bounded grace period if needed.
+
+**Partial results and retry guidance:** if metadata or a local Git branch
+is successfully inspected but a later step fails, Activity retains the
+successful summaries and labels the operation **Partially completed**
+rather than incorrectly reporting success or total failure. Transient
+network/rate-limit/timeout errors are distinguished from permissions,
+unavailable Git and invalid checkouts, with actionable retry guidance.
+Raw subprocess output and credentials are never persisted.
+
+Persistent workspace roots and repository associations are planned for
+M3.1. Clone/fetch/pull remain unimplemented.
 
 ## Architecture and security
 
