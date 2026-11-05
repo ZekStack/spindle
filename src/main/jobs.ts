@@ -156,7 +156,7 @@ export class JobManager {
       this.line(job, `Recent workflow runs found: ${workflows.length}.`, 100)
       this.finish(job, 'completed', null, 'Repository inspection completed.')
     } catch (error) {
-      if (job.phase === 'cancelled') return
+      if (!activeJob(job.phase)) return
       this.finish(job, 'failed', timedOut ? 'timeout' : codeFor(error),
         timedOut ? 'Repository inspection timed out.' : 'Repository inspection failed.')
     } finally {
