@@ -37,11 +37,11 @@ function createWindow(): void {
   window = mainWindow
   updater ??= new UpdateManager()
   const github = new GitHubClient()
-  jobs ??= new JobManager(join(app.getPath('userData'), 'activity-history.json'), github)
+  const local = new LocalWorkspaceStore(join(app.getPath('userData'), 'local-workspaces.json'))
+  jobs ??= new JobManager(join(app.getPath('userData'), 'activity-history.json'), github, local)
   registerIpc(mainWindow,
     new WorkspaceStore(join(app.getPath('userData'), 'workspace.json')),
-    github, updater, jobs,
-    new LocalWorkspaceStore(join(app.getPath('userData'), 'local-workspaces.json')))
+    github, updater, jobs, local)
   mainWindow.once('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     try { void shell.openExternal(parseGitHubUrl(url)) } catch { /* Reject external URLs */ }

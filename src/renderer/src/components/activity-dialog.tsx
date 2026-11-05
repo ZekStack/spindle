@@ -54,6 +54,10 @@ export function ActivityDialog() {
   const runningCount = jobs.filter((job) => activeJob(job.phase)).length
   const filtered = jobs.filter((job) => filter === 'active' ? activeJob(job.phase) : !activeJob(job.phase))
   const detail = filtered.find((job) => job.id === selected) ?? filtered[0] ?? null
+  const labelFor = (job: JobRecord) => t(job.kind === 'local-git-inspection'
+    ? 'activityLocalInspection' : job.kind === 'local-git-clone' ? 'activityClone'
+      : job.kind === 'local-git-fetch' ? 'activityFetch'
+        : job.kind === 'local-git-pull' ? 'activityPull' : 'activityInspection')
 
   async function inspectLocal() {
     setBusy(true)
@@ -136,8 +140,7 @@ export function ActivityDialog() {
                 <span className="min-w-0 flex-1 truncate">{job.repository}</span>
               </div>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                {t(job.kind === 'local-git-inspection'
-                  ? 'activityLocalInspection' : 'activityInspection')} · {t(`activityPhase_${job.phase}`)}
+                {labelFor(job)} · {t(`activityPhase_${job.phase}`)}
               </p>
             </button>)}
           </div>
@@ -145,8 +148,7 @@ export function ActivityDialog() {
             {!detail ? <p className="text-sm text-[var(--muted)]">{t('activitySelect')}</p> : <>
               <h3 className="break-all text-sm font-semibold">{detail.repository}</h3>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                {t(detail.kind === 'local-git-inspection'
-                  ? 'activityLocalInspection' : 'activityInspection')} · {t(`activityPhase_${detail.phase}`)}
+                {labelFor(detail)} · {t(`activityPhase_${detail.phase}`)}
               </p>
               {detail.location && <p className="mt-1 break-all text-xs text-[var(--muted)]">
                 {detail.location}
@@ -183,10 +185,11 @@ export function ActivityDialog() {
                 {activeJob(detail.phase) ? <Button variant="secondary" size="sm" disabled={busy}
                   onClick={() => void cancel(detail.id)}>
                   <XCircle className="size-3.5"/>{t('activityCancel')}
-                </Button> : <Button size="sm" variant="secondary" disabled={busy}
+                </Button> : (detail.kind === 'repository-inspection' || detail.kind === 'local-git-inspection')
+                  ? <Button size="sm" variant="secondary" disabled={busy}
                   onClick={() => void rerun(detail)}>
                   <RefreshCw className="size-3.5"/>{t('activityRunAgain')}
-                </Button>}
+                </Button> : null}
               </div>
             </>}
           </section>

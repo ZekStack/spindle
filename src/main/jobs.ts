@@ -3,11 +3,14 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync
 import { basename, dirname, isAbsolute } from 'node:path'
 import { GitProcessError, runGit } from './git-process'
 import { validateLogin, validateRepository } from '../shared/contracts'
+import { cloneCheckout, syncCheckout, type SyncOperation } from './git-sync'
+import type { LocalWorkspaceStore } from './local-workspaces'
 import { activeJob, validateJobId, type JobErrorCode, type JobRecord } from '../shared/jobs'
 import type { GitHubClient } from './github'
 
 type Inspector = Pick<GitHubClient, 'repository' | 'releases' | 'workflowRuns'>
 type Listener = (jobs: JobRecord[]) => void
+const isLocal = (kind: JobRecord['kind']): boolean => kind !== 'repository-inspection'
 const MAX_HISTORY = 100
 const MAX_RUNNING = 2
 const DEADLINE_MS = 45_000
@@ -30,10 +33,13 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     job && typeof job === 'object' && typeof job.id === 'string' &&
     typeof job.repository === 'string' && job.repository.length <= 220 &&
     (job.kind === 'repository-inspection' ||
-      (job.kind === 'local-git-inspection' && typeof job.location === 'string' &&
+      (['local-git-inspection', 'local-git-clone', 'local-git-fetch', 'local-git-pull'].includes(job.kind) &&
+        typeof job.location === 'string' &&
         job.location.length > 0 && job.location.length <= 2048 &&
         isAbsolute(job.location) && !job.location.includes('\0'))) &&
-    job.action === 'inspect' &&
+    job.action === (job.kind === 'local-git-clone' ? 'clone'
+      : job.kind === 'local-git-fetch' ? 'fetch'
+        : job.kind === 'local-git-pull' ? 'pull' : 'inspect') &&
     ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
     typeof job.requestedAt === 'string' && job.requestedAt.length <= 40 &&
     (job.startedAt === null || typeof job.startedAt === 'string') &&
@@ -60,7 +66,8 @@ export class JobManager {
   private healthy = true
   private scheduled = false
 
-  constructor(private readonly file: string, private readonly github: Inspector) {
+  constructor(private readonly file: string, private readonly github: Inspector,
+    private readonly local?: LocalWorkspaceStore) {
     if (!existsSync(file)) return
     try {
       if (statSync(file).size > 512_000) throw new Error('Oversized activity history')
@@ -73,7 +80,7 @@ export class JobManager {
         job.phase = 'interrupted'
         job.finishedAt = new Date().toISOString()
         job.errorCode = 'interrupted'
-        job.retryable = true
+        job.retryable = job.kind !== 'local-git-clone'
         job.output.push('Interrupted by application restart.')
         changed = true
       }
@@ -158,6 +165,46 @@ export class JobManager {
     return this.inspectLocal(previous.location)
   }
 
+  /** Create a Git operation only against paths retained by the native-picker store. */
+  private enqueueSync(repository: string, kind: 'local-git-clone' | 'local-git-fetch' | 'local-git-pull',
+    location: string): JobRecord {
+    this.list()
+    if (this.history.some((item) => activeJob(item.phase) &&
+      isLocal(item.kind) && item.repository.toLowerCase() === repository.toLowerCase())) {
+      throw new Error('A local Git operation is already running for this repository')
+    }
+    if (this.history.filter((item) => activeJob(item.phase)).length >= 20) {
+      throw new Error('Activity queue is full')
+    }
+    const action = kind === 'local-git-clone' ? 'clone' : kind === 'local-git-fetch' ? 'fetch' : 'pull'
+    const record: JobRecord = {
+      id: randomUUID(), kind, repository, location, action,
+      requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
+      phase: 'queued', progress: 0, output: [`Git ${action} queued.`],
+      errorCode: null, retryable: false
+    }
+    this.history.unshift(record)
+    this.history = this.history.slice(0, MAX_HISTORY)
+    this.publish()
+    this.schedule()
+    return copy(record)
+  }
+
+  clone(ownerValue: string, nameValue: string, savedRoot: string): JobRecord {
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    if (!this.local) throw new Error('Local workspace storage is not configured')
+    const destination = this.local.cloneDestination(repository, savedRoot)
+    return this.enqueueSync(repository, 'local-git-clone', destination)
+  }
+
+  sync(ownerValue: string, nameValue: string, operation: SyncOperation): JobRecord {
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    if (operation !== 'fetch' && operation !== 'pull') throw new Error('Invalid Git action')
+    if (!this.local) throw new Error('Local workspace storage is not configured')
+    return this.enqueueSync(repository, operation === 'fetch' ? 'local-git-fetch' : 'local-git-pull',
+      this.local.pathFor(repository))
+  }
+
   cancel(rawId: string): JobRecord {
     const id = validateJobId(rawId)
     const job = this.history.find((item) => item.id === id)
@@ -178,9 +225,9 @@ export class JobManager {
         // Keep local child processes serialized, including future write jobs.
         // GitHub API inspections still use spare slots concurrently.
         const localRunning = [...this.controllers.keys()].some((id) =>
-          this.history.some((job) => job.id === id && job.kind === 'local-git-inspection'))
+          this.history.some((job) => job.id === id && isLocal(job.kind)))
         const next = this.history.find((job) => job.phase === 'queued' &&
-          (job.kind !== 'local-git-inspection' || !localRunning))
+          (!isLocal(job.kind) || !localRunning))
         if (!next) break
         void this.run(next)
       }
@@ -194,17 +241,29 @@ export class JobManager {
     job.startedAt = new Date().toISOString()
     job.phase = 'running'
     this.line(job, job.kind === 'local-git-inspection'
-      ? 'Starting local Git inspection.' : 'Contacting GitHub for repository inspection.', 5)
+      ? 'Starting local Git inspection.' : isLocal(job.kind)
+        ? `Starting Git ${job.action}.` : 'Contacting GitHub for repository inspection.', 5)
     let timedOut = false
     const watchdog = setTimeout(() => {
       timedOut = true
       controller.abort()
-    }, DEADLINE_MS)
+    }, job.kind === 'local-git-clone' ? 600_000 : isLocal(job.kind) && job.kind !== 'local-git-inspection' ? 300_000 : DEADLINE_MS)
     try {
       if (job.kind === 'local-git-inspection') {
         await this.inspectWorktree(job, controller.signal)
         if (controller.signal.aborted) return
         this.finish(job, 'completed', null, 'Local Git inspection completed.')
+      } else if (isLocal(job.kind)) {
+        if (!this.local || !job.location) throw new Error('Local checkout unavailable')
+        const report = (message: string, percent: number) => this.line(job, message, percent)
+        if (job.kind === 'local-git-clone') {
+          await cloneCheckout(this.local, job.repository, job.location, controller.signal, report)
+        } else {
+          await syncCheckout(this.local, job.repository, job.action as SyncOperation,
+            controller.signal, report)
+        }
+        if (controller.signal.aborted) return
+        this.finish(job, 'completed', null, `Git ${job.action} completed.`)
       } else {
         await this.github.repository(owner, name, controller.signal)
         if (controller.signal.aborted) return
@@ -227,19 +286,19 @@ export class JobManager {
       // Progress can reflect useful completed steps even when a subsequent
       // GitHub or local Git request fails; never report false full success.
       const hasPartialResult = job.kind === 'repository-inspection'
-        ? job.progress >= 33 : job.progress >= 60
+        ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
       this.finish(job, hasPartialResult ? 'partial' : 'failed', code,
         timedOut ? 'Operation timed out.'
           : code === 'git-unavailable' ? 'Git executable was not found.'
             : code === 'output-limit' ? 'Git output exceeded the safe limit.'
-              : job.kind === 'local-git-inspection'
-                ? 'Local Git inspection could not finish.'
+              : isLocal(job.kind)
+                ? `Local Git ${job.action} could not finish. Check the destination, origin, upstream and credentials.`
                 : 'Repository inspection could not finish.')
     } finally {
       clearTimeout(watchdog)
       if (timedOut && activeJob(job.phase)) {
         const partial = job.kind === 'repository-inspection'
-          ? job.progress >= 33 : job.progress >= 60
+          ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
         this.finish(job, partial ? 'partial' : 'failed', 'timeout', 'Operation timed out.')
       }
       this.controllers.delete(job.id)
@@ -299,9 +358,10 @@ export class JobManager {
     if (!activeJob(job.phase)) return
     job.phase = phase
     job.errorCode = errorCode
-    job.retryable = phase === 'cancelled' || errorCode === 'rate-limit' ||
-      errorCode === 'network' || errorCode === 'timeout' ||
-      errorCode === 'interrupted' || errorCode === 'unknown'
+    job.retryable = job.kind !== 'local-git-clone' &&
+      (phase === 'cancelled' || errorCode === 'rate-limit' ||
+        errorCode === 'network' || errorCode === 'timeout' ||
+        errorCode === 'interrupted' || errorCode === 'unknown')
     job.finishedAt = new Date().toISOString()
     job.output.push(message)
     job.output = job.output.slice(-24)

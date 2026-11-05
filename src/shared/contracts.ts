@@ -113,6 +113,8 @@ export interface SpindleApi {
   linkRepositoryFolder(owner: string, name: string): Promise<LocalWorkspace | null>
   unlinkRepositoryFolder(owner: string, name: string): Promise<LocalWorkspace>
   inspectLinkedRepository(owner: string, name: string): Promise<JobRecord>
+  cloneRepository(owner: string, name: string, savedRoot: string): Promise<JobRecord>
+  syncLinkedRepository(owner: string, name: string, operation: 'fetch' | 'pull'): Promise<JobRecord>
   addOrganization(login: string): Promise<Workspace>
   removeOrganization(login: string): Promise<Workspace>
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>

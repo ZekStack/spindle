@@ -78,6 +78,10 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     local.unlink(`${validateLogin(owner)}/${validateRepository(name)}`))
   handle('spindle:local:inspect', (owner: string, name: string) =>
     jobs.inspectLocal(local.pathFor(`${validateLogin(owner)}/${validateRepository(name)}`)))
+  handle('spindle:local:clone', (owner: string, name: string, root: string) =>
+    jobs.clone(owner, name, root))
+  handle('spindle:local:sync', (owner: string, name: string, operation: 'fetch' | 'pull') =>
+    jobs.sync(owner, name, operation))
   handle('spindle:workspace:get', () => store.load())
   handle('spindle:workspace:add-org', async (login: string) => {
     const org = await github.organization(validateLogin(login))

@@ -3,7 +3,7 @@ import {
   existsSync, mkdirSync, readFileSync, realpathSync, renameSync,
   statSync, writeFileSync
 } from 'node:fs'
-import { dirname, isAbsolute } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { parseRepositoryFullName, type LocalWorkspace } from '../shared/contracts'
 import { runGit } from './git-process'
 
@@ -174,6 +174,24 @@ export class LocalWorkspaceStore {
       item.repository.toLowerCase() !== repository.toLowerCase())
     return this.save(state)
   }
+  /** A clone may only target a root previously chosen through the native picker. */
+  cloneDestination(repositoryValue: string, savedRoot: string): string {
+    const { name, owner } = parseRepositoryFullName(repositoryValue)
+    const state = this.load()
+    if (state.repositories.some((item) =>
+      item.repository.toLowerCase() === `${owner}/${name}`.toLowerCase())) {
+      throw new Error('Repository already has a linked checkout')
+    }
+    if (typeof savedRoot !== 'string' || !state.roots.includes(savedRoot)) {
+      throw new Error('Select a saved local workspace folder')
+    }
+    // A renamed or replaced root must be reselected, never silently followed.
+    if (key(canonicalFolder(savedRoot)) !== key(savedRoot)) {
+      throw new Error('Workspace folder has moved; select it again')
+    }
+    return join(savedRoot, name)
+  }
+
   pathFor(repositoryValue: string): string {
     const repository = canonicalRepo(repositoryValue)
     const state = this.load()

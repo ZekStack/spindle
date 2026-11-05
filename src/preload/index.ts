@@ -22,6 +22,9 @@ const api: SpindleApi = {
   linkRepositoryFolder: (owner, name) => ipcRenderer.invoke('spindle:local:link', owner, name),
   unlinkRepositoryFolder: (owner, name) => ipcRenderer.invoke('spindle:local:unlink', owner, name),
   inspectLinkedRepository: (owner, name) => ipcRenderer.invoke('spindle:local:inspect', owner, name),
+  cloneRepository: (owner, name, root) => ipcRenderer.invoke('spindle:local:clone', owner, name, root),
+  syncLinkedRepository: (owner, name, operation) =>
+    ipcRenderer.invoke('spindle:local:sync', owner, name, operation),
   addOrganization: (login) => ipcRenderer.invoke('spindle:workspace:add-org', login),
   removeOrganization: (login) => ipcRenderer.invoke('spindle:workspace:remove-org', login),
   trackRepository: (owner, name, tracked) =>
