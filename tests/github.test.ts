@@ -126,3 +126,32 @@ test('identity refresh clears cached CLI credentials without changing global log
   assert.equal((await client.identity(true)).account?.login, 'new-user')
   assert.equal(invalidations, 1)
 })
+
+test('repository and organization discovery use scoped, validated GitHub search endpoints', async () => {
+  const { client, seen } = mockGithub({
+    '/search/repositories': { items: [repo] },
+    '/search/users': { items: [{ login: 'OtherOrg', avatar_url: null }] }
+  })
+  const results = await client.searchRepositories('repo', 2)
+  assert.equal(results[0].fullName, 'OtherOrg/repo')
+  assert.equal(results[0].private, true)
+  assert.equal(seen[0].auth, 'Bearer fake-token')
+  const query = new URL(seen[0].url).searchParams
+  assert.equal(query.get('q'), 'repo in:name')
+  assert.equal(query.get('page'), '2')
+  assert.equal((await client.searchOrganizations('Other', 1))[0].login, 'OtherOrg')
+  assert.equal(new URL(seen[1].url).searchParams.get('q'), 'Other in:login type:org')
+  assert.equal(seen[1].auth, 'Bearer fake-token')
+})
+
+test('GitHub search input cannot inject API qualifiers or unrestricted URLs', async () => {
+  const { client, seen } = mockGithub({})
+  for (const bad of ['x', 'repo type:user', 'x?q=token', '../private', 'owner/repo', 'a'.repeat(81)]) {
+    await assert.rejects(() => client.searchRepositories(bad, 1))
+  }
+  for (const bad of ['a', '../x', 'org type:user']) {
+    await assert.rejects(() => client.searchOrganizations(bad, 1))
+  }
+  await assert.rejects(() => client.searchRepositories('repo', 0))
+  assert.equal(seen.length, 0)
+})
