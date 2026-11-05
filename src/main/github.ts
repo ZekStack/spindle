@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import {
-  validateLogin, validatePage, validateRepository,
+  LOGIN_PATTERN, validateLogin, validatePage, validateRepository,
   type AuthStatus, type GitHubIdentity, type Organization, type Release, type Repository, type WorkflowRun
 } from '../shared/contracts'
 
@@ -73,7 +73,7 @@ export class GitHubClient {
         login?: unknown; name?: unknown; avatar_url?: unknown
       }
       if (typeof viewer.login !== 'string' ||
-          !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(viewer.login)) {
+          ) {
         return state('unavailable')
       }
       const avatar = typeof viewer.avatar_url === 'string' &&
