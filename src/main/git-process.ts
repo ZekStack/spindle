@@ -22,7 +22,8 @@ const STOP_GRACE_MS = 1500
 export function runGit(
   args: readonly string[],
   signal: AbortSignal,
-  onStdout?: (chunk: string) => void
+  onStdout?: (chunk: string) => void,
+  onStderr?: (chunk: string) => void
 ): Promise<string> {
   if (signal.aborted) return Promise.reject(new DOMException('Cancelled', 'AbortError'))
   return new Promise((resolve, reject) => {
@@ -101,6 +102,14 @@ export function runGit(
       if (bytes > MAX_OUTPUT) {
         overflow = true
         stop()
+        return
+      }
+      if (!cancelled && !overflow) {
+        try { onStderr?.(chunk.toString('utf8')) }
+        catch {
+          callbackFailed = true
+          stop()
+        }
       }
     })
     child.on('error', () => { spawnError = true })
