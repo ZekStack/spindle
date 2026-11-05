@@ -32,7 +32,7 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     (job.kind === 'repository-inspection' ||
       (job.kind === 'local-git-inspection' && typeof job.location === 'string' &&
         job.location.length > 0 && job.location.length <= 2048 &&
-        isAbsolute(job.location) && !job.location.includes('\\0'))) &&
+        isAbsolute(job.location) && !job.location.includes('\0'))) &&
     job.action === 'inspect' &&
     ['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
     typeof job.requestedAt === 'string' && job.requestedAt.length <= 40 &&
@@ -129,7 +129,7 @@ export class JobManager {
     if (this.history.filter((item) => activeJob(item.phase)).length >= 20) {
       throw new Error('Activity queue is full')
     }
-    const label = basename(location).replace(/[\\x00-\\x1f\\x7f]/g, ' ').slice(0, 100) || 'Local checkout'
+    const label = basename(location).replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 100) || 'Local checkout'
     const record: JobRecord = {
       id: randomUUID(), kind: 'local-git-inspection', repository: label,
       location, action: 'inspect',
@@ -172,8 +172,8 @@ export class JobManager {
       while (this.controllers.size < MAX_RUNNING) {
         // Keep local child processes serialized, including future write jobs.
         // GitHub API inspections still use spare slots concurrently.
-        const localRunning = this.history.some((job) =>
-          job.kind === 'local-git-inspection' && job.phase === 'running')
+        const localRunning = [...this.controllers.keys()].some((id) =>
+          this.history.some((job) => job.id === id && job.kind === 'local-git-inspection'))
         const next = this.history.find((job) => job.phase === 'queued' &&
           (job.kind !== 'local-git-inspection' || !localRunning))
         if (!next) break
@@ -262,7 +262,7 @@ export class JobManager {
       }
     })
     if (signal.aborted) return
-    const entries = status.trimEnd() ? status.trimEnd().split('\\n') : []
+    const entries = status.trimEnd() ? status.trimEnd().split('\n') : []
     const staged = entries.filter((line) => line[0] !== ' ' && line[0] !== '?').length
     const unstaged = entries.filter((line) => line[1] !== ' ' && line[0] !== '?').length
     const untracked = entries.filter((line) => line.startsWith('??')).length
