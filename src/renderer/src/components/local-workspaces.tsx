@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderGit2, FolderOpen, Link2, RotateCcw, Trash2, Unlink } from 'lucide-react'
+import { ArrowDown, Download, FolderGit2, FolderOpen, Link2, RotateCcw, Trash2, Unlink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { LocalWorkspace } from '../../../shared/contracts'
 import { Button } from './ui/button'
@@ -99,8 +99,31 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(false)
   const [unlinkOpen, setUnlinkOpen] = useState(false)
+  const [cloneOpen, setCloneOpen] = useState(false)
+  const [cloneRoot, setCloneRoot] = useState('')
+  const [pullOpen, setPullOpen] = useState(false)
   const linked = query.data?.repositories.find((item) =>
     item.repository.toLowerCase() === `${owner}/${name}`.toLowerCase())
+
+  // Cloning links a checkout only after Git and origin verification complete.
+  useEffect(() => window.spindle.onJobsChanged((jobs) => {
+    if (jobs.some((job) => job.kind === 'local-git-clone' &&
+      job.repository.toLowerCase() === `${owner}/${name}`.toLowerCase() &&
+      job.phase === 'completed')) {
+      void client.invalidateQueries({ queryKey: KEY })
+    }
+  }), [client, owner, name])
+
+  async function startJob(operation: () => Promise<unknown>) {
+    setBusy(true); setError(false)
+    try {
+      await operation()
+      setCloneOpen(false)
+      setPullOpen(false)
+      window.dispatchEvent(new Event('spindle:activity:open'))
+    } catch { setError(true) }
+    finally { setBusy(false) }
+  }
 
   async function mutate(operation: () => Promise<LocalWorkspace | null>) {
     setBusy(true); setError(false)
@@ -140,17 +163,74 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
     </div>
     {query.isError && <p role="alert" className="mt-3 text-xs text-red-400">{t('localSettingsError')}</p>}
     {error && <p role="alert" className="mt-3 text-xs text-red-400">{t('localLinkError')}</p>}
+    {!linked && <div className="mt-4 flex flex-wrap items-center gap-2">
+      <Button variant="secondary" size="sm"
+        disabled={busy || query.isLoading || query.isError || !query.data?.roots.length}
+        onClick={() => {
+          setCloneRoot(query.data?.roots[0] ?? '')
+          setCloneOpen(true)
+        }}>
+        <Download className="size-3.5"/>{t('localClone')}
+      </Button>
+      {!query.data?.roots.length && <span className="text-xs text-[var(--muted)]">
+        {t('localCloneNeedsRoot')}
+      </span>}
+    </div>}
     {linked ? <>
       <p className="mt-4 break-all text-sm text-[var(--muted)]">{linked.path}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => void inspect()}>
           <RotateCcw className="size-3.5"/>{t('activityInspectLocal')}
         </Button>
+        <Button variant="secondary" size="sm" disabled={busy}
+          onClick={() => void startJob(() => window.spindle.syncLinkedRepository(owner, name, 'fetch'))}>
+          <Download className="size-3.5"/>{t('localFetch')}
+        </Button>
+        <Button variant="secondary" size="sm" disabled={busy} onClick={() => setPullOpen(true)}>
+          <ArrowDown className="size-3.5"/>{t('localPull')}
+        </Button>
         <Button variant="ghost" size="sm" disabled={busy} onClick={() => setUnlinkOpen(true)}>
           <Unlink className="size-3.5"/>{t('localUnlink')}
         </Button>
       </div>
     </> : <p className="mt-3 text-sm text-[var(--muted)]">{t('localNoCheckout')}</p>}
+    <Dialog open={cloneOpen} onOpenChange={setCloneOpen}>
+      <DialogContent>
+        <DialogTitle className="font-semibold">{t('localClone')}</DialogTitle>
+        <DialogDescription className="mt-2 text-sm text-[var(--muted)]">
+          {t('localCloneDetails')}
+        </DialogDescription>
+        <label className="mt-4 block text-sm">
+          {t('localCloneRoot')}
+          <select className="field mt-2 w-full" value={cloneRoot}
+            onChange={(event) => setCloneRoot(event.target.value)}>
+            {(query.data?.roots ?? []).map((root) => <option key={root} value={root}>{root}</option>)}
+          </select>
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" disabled={busy} onClick={() => setCloneOpen(false)}>{t('localCancel')}</Button>
+          <Button disabled={busy || !cloneRoot} onClick={() =>
+            void startJob(() => window.spindle.cloneRepository(owner, name, cloneRoot))}>
+            {t('localClone')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={pullOpen} onOpenChange={setPullOpen}>
+      <DialogContent>
+        <DialogTitle className="font-semibold">{t('localPull')}</DialogTitle>
+        <DialogDescription className="mt-2 text-sm text-[var(--muted)]">
+          {t('localPullDetails')}
+        </DialogDescription>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" disabled={busy} onClick={() => setPullOpen(false)}>{t('localCancel')}</Button>
+          <Button disabled={busy} onClick={() =>
+            void startJob(() => window.spindle.syncLinkedRepository(owner, name, 'pull'))}>
+            {t('localPull')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     <Dialog open={unlinkOpen} onOpenChange={setUnlinkOpen}>
       <DialogContent>
         <DialogTitle className="font-semibold">{t('localUnlink')}</DialogTitle>
