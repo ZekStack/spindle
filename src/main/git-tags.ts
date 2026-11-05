@@ -116,7 +116,8 @@ export async function listGitTags(
   } catch (error) {
     if (signal.aborted || error instanceof DOMException && error.name === 'AbortError') throw error
     originState = 'unavailable'
-    originError = error instanceof GitSafetyError ? error.code : 'unknown'
+    originError = error instanceof GitSafetyError &&
+      (error.code === 'auth' || error.code === 'network') ? error.code : 'unknown'
   }
   const names = [...new Set([...local.keys(), ...origin.keys()])].sort()
   const entries: GitTagEntry[] = names.slice(0, MAX_TAG_ENTRIES).map(name => ({
