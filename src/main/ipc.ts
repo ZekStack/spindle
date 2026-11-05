@@ -2,6 +2,7 @@ import { clipboard, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent 
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { GitHubClient } from './github'
+import { githubDeviceAuth } from './device-auth'
 import { WorkspaceStore } from './store'
 import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
@@ -51,6 +52,11 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
   handle('spindle:auth:status', () => github.authStatus())
   handle('spindle:auth:identity', (refresh: boolean = false) => github.identity(refresh === true))
+  handle('spindle:auth:device-setup', () => githubDeviceAuth.setup())
+  handle('spindle:auth:device-start', (clientId?: string) => githubDeviceAuth.start(clientId))
+  handle('spindle:auth:device-poll', () => githubDeviceAuth.poll())
+  handle('spindle:auth:device-cancel', () => githubDeviceAuth.cancel())
+  handle('spindle:auth:managed-signout', () => githubDeviceAuth.signOut())
   handle('spindle:github:open', async (url: string) => { await shell.openExternal(parseGitHubUrl(url)) })
   handle('spindle:update:state', () => updates.snapshot())
   handle('spindle:update:check', () => updates.check(true))
