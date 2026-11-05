@@ -26,6 +26,9 @@ const api: SpindleApi = {
   syncLinkedRepository: (owner, name, operation) =>
     ipcRenderer.invoke('spindle:local:sync', owner, name, operation),
   previewLinkedPull: (owner, name) => ipcRenderer.invoke('spindle:local:pull-preview', owner, name),
+  listLinkedTags: (owner, name) => ipcRenderer.invoke('spindle:local:tags', owner, name),
+  mutateLinkedTag: (owner, name, request) =>
+    ipcRenderer.invoke('spindle:local:tag-action', owner, name, request),
   addOrganization: (login) => ipcRenderer.invoke('spindle:workspace:add-org', login),
   removeOrganization: (login) => ipcRenderer.invoke('spindle:workspace:remove-org', login),
   trackRepository: (owner, name, tracked) =>
