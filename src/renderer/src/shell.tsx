@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from './components/ui/button'
 import { UpdateDialog } from './components/update-dialog'
 import { AccountIdentity } from './components/account-identity'
+import { ActivityDialog } from './components/activity-dialog'
 
 type Theme = 'dark' | 'light'
 function initialTheme(): Theme {
@@ -35,7 +36,8 @@ export function Shell({ children }: { children: ReactNode }) {
         </Link>
         <div className="flex items-center gap-2">
           <AccountIdentity/>
-           <UpdateDialog/>
+          <ActivityDialog/>
+          <UpdateDialog/>
           <Button variant="ghost" size="icon" title={t('language')} aria-label={t('language')} onClick={switchLanguage}>
             <Globe2 className="size-4"/><span className="absolute mt-7 ml-6 text-[9px] font-bold">{i18n.language.toUpperCase()}</span>
           </Button>
