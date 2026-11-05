@@ -4,6 +4,8 @@ import { basename, dirname, isAbsolute } from 'node:path'
 import { GitProcessError, runGit } from './git-process'
 import { validateLogin, validateRepository } from '../shared/contracts'
 import { cloneCheckout, syncCheckout, type SyncOperation } from './git-sync'
+import { inspectGitCheckout } from './git-inspection'
+import { validGitInspection } from '../shared/git-inspection'
 import type { LocalWorkspaceStore } from './local-workspaces'
 import { activeJob, validateJobId, type JobErrorCode, type JobRecord } from '../shared/jobs'
 import type { GitHubClient } from './github'
@@ -16,7 +18,11 @@ const MAX_RUNNING = 2
 const DEADLINE_MS = 45_000
 
 function copy(job: JobRecord): JobRecord {
-  return { ...job, output: [...job.output] }
+  return { ...job, output: [...job.output],
+    ...(job.inspection ? { inspection: { ...job.inspection,
+      localTags: { ...job.inspection.localTags, names: [...job.inspection.localTags.names] },
+      remoteTags: { ...job.inspection.remoteTags, names: [...job.inspection.remoteTags.names] }
+    } } : {}) }
 }
 function codeFor(error: unknown): JobErrorCode {
   const message = error instanceof Error ? error.message.toLowerCase() : ''
@@ -50,7 +56,12 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     (job.errorCode === null || ['auth', 'forbidden', 'not-found', 'rate-limit',
       'network', 'timeout', 'interrupted', 'git-unavailable', 'git-failed',
       'output-limit', 'unknown'].includes(job.errorCode)) &&
-    (job.retryable === undefined || typeof job.retryable === 'boolean'))
+    (job.retryable === undefined || typeof job.retryable === 'boolean') &&
+    (job.linkedRepository === undefined ||
+      (job.kind === 'local-git-inspection' && typeof job.linkedRepository === 'string' &&
+       /^[a-zA-Z0-9-]{1,39}\/[a-zA-Z0-9_.-]{1,100}$/.test(job.linkedRepository))) &&
+    (job.inspection === undefined ||
+      (job.kind === 'local-git-inspection' && validGitInspection(job.inspection))))
 }
 
 /**
@@ -126,24 +137,25 @@ export class JobManager {
   }
 
   /** Only the native directory picker may supply a new local path. */
-  inspectLocal(pickedPath: string): JobRecord {
+  inspectLocal(pickedPath: string, linkedRepository?: string): JobRecord {
     this.list()
     if (typeof pickedPath !== 'string' || pickedPath.length > 2048) {
       throw new Error('Invalid local folder')
     }
-    const location = realpathSync(pickedPath)
+    const location = realpathSync.native(pickedPath)
     if (!isAbsolute(location) || location.length > 2048 ||
         !statSync(location).isDirectory()) throw new Error('Invalid local folder')
     const existing = this.history.find((job) => job.kind === 'local-git-inspection' &&
-      activeJob(job.phase) && job.location === location)
+      activeJob(job.phase) && job.location === location &&
+      job.linkedRepository === linkedRepository)
     if (existing) return copy(existing)
     if (this.history.filter((item) => activeJob(item.phase)).length >= 20) {
       throw new Error('Activity queue is full')
     }
     const label = basename(location).replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 100) || 'Local checkout'
     const record: JobRecord = {
-      id: randomUUID(), kind: 'local-git-inspection', repository: label,
-      location, action: 'inspect',
+      id: randomUUID(), kind: 'local-git-inspection', repository: linkedRepository ?? label,
+      location, ...(linkedRepository ? { linkedRepository } : {}), action: 'inspect',
       requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
       phase: 'queued', progress: 0, output: ['Local Git inspection queued.'], errorCode: null,
       retryable: false
@@ -155,12 +167,23 @@ export class JobManager {
     return copy(record)
   }
 
+  /** Inspect a saved association; do not accept a renderer-provided location. */
+  inspectLinked(ownerValue: string, nameValue: string): JobRecord {
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    if (!this.local) throw new Error('Local workspace storage is not configured')
+    return this.inspectLocal(this.local.pathFor(repository), repository)
+  }
+
   /** Retry a previously user-selected directory, never a renderer-supplied path. */
   retryLocal(rawId: string): JobRecord {
     const id = validateJobId(rawId)
     const previous = this.history.find((job) => job.id === id)
     if (previous?.kind !== 'local-git-inspection' || !previous.location) {
       throw new Error('Local inspection not found')
+    }
+    if (previous.linkedRepository) {
+      const [owner, name] = previous.linkedRepository.split('/')
+      return this.inspectLinked(owner, name)
     }
     return this.inspectLocal(previous.location)
   }
@@ -312,38 +335,17 @@ export class JobManager {
     await runGit(['--version'], signal)
     if (signal.aborted) return
     this.line(job, 'Finding local working tree.', 25)
-    const top = (await runGit([
-      '-c', 'core.fsmonitor=false', '-C', job.location, 'rev-parse', '--show-toplevel'
-    ], signal)).trim()
-    if (!isAbsolute(top) || !top) throw new Error('Not a local Git worktree')
-    const root = realpathSync(top)
+    const snapshot = await inspectGitCheckout(
+      job.location, signal, (message, progress) => this.line(job, message, progress),
+      job.linkedRepository, this.local
+    )
     if (signal.aborted) return
-    this.line(job, 'Working tree found.', 45)
-    const branch = (await runGit([
-      '-c', 'core.fsmonitor=false', '-C', root, 'branch', '--show-current'
-    ], signal)).trim()
-    if (signal.aborted) return
-    const safeBranch = /^[a-zA-Z0-9._/-]{1,100}$/.test(branch)
-      ? branch : branch ? '(name omitted)' : '(detached HEAD)'
-    this.line(job, `Branch: ${safeBranch}.`, 60)
-    let scanned = false
-    const status = await runGit([
-      '-c', 'core.fsmonitor=false', '-C', root,
-      'status', '--porcelain=v1', '--untracked-files=normal'
-    ], signal, (chunk) => {
-      // Report streamed work without forwarding potentially sensitive paths.
-      if (!scanned && chunk.length > 0) {
-        scanned = true
-        this.line(job, 'Scanning changed files.', 80)
-      }
-    })
-    if (signal.aborted) return
-    const entries = status.trimEnd() ? status.trimEnd().split('\n') : []
-    const staged = entries.filter((line) => line[0] !== ' ' && line[0] !== '?').length
-    const unstaged = entries.filter((line) => line[1] !== ' ' && line[0] !== '?').length
-    const untracked = entries.filter((line) => line.startsWith('??')).length
-    this.line(job, `Working tree: ${entries.length ? 'changes found' : 'clean'}.`, 90)
-    this.line(job, `Staged: ${staged}; modified: ${unstaged}; untracked: ${untracked}.`, 100)
+    // Publish only the bounded, validated snapshot; no Git stderr, filenames
+    // or remote URLs are ever saved to history.
+    if (!validGitInspection(snapshot)) throw new Error('Invalid Git inspection snapshot')
+    job.inspection = snapshot
+    this.line(job, `Branch: ${snapshot.branch ?? '(detached HEAD)'}.`, 96)
+    this.line(job, `Staged: ${snapshot.staged}; modified: ${snapshot.unstaged}; untracked: ${snapshot.untracked}.`, 100)
   }
 
   private line(job: JobRecord, message: string, progress: number): void {
