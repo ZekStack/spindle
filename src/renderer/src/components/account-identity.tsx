@@ -34,7 +34,6 @@ export function AccountIdentity() {
   const unavailable = !current || current.state === 'unavailable'
   const problem = identity.isError || (current && !['authenticated', 'anonymous'].includes(current.state))
   const status = current?.state ?? 'unavailable'
-  const title = viewer?.login ?? t('identityTitle')
 
   return <Dialog open={open} onOpenChange={setOpen}>
     <Button variant="ghost" className="max-w-44 gap-2" title={t('identityTitle')}
@@ -89,12 +88,13 @@ export function AccountIdentity() {
           </div> : <p className="mt-2 text-xs text-[var(--muted)]">{t('identityScopesUnknown')}</p>}
           <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">{t('identityScopesNote')}</p>
         </div>
-      </> : <p className="mt-4 text-sm leading-relaxed text-[var(--muted)]">
-        {t('identitySignInHelp')}
-        <code className="mt-2 block rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-sm text-[var(--fg)]">
-          gh auth login
-        </code>
-      </p>}
+      </> : (status === 'anonymous' || status === 'invalid')
+        ? <p className="mt-4 text-sm leading-relaxed text-[var(--muted)]">
+          {t('identitySignInHelp')}
+          <code className="mt-2 block rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-sm text-[var(--fg)]">
+            gh auth login
+          </code>
+        </p> : null}
       <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">{t('identitySignOutHelp')}</p>
       {refresh.isError && <p role="alert" className="mt-3 text-sm text-red-400">
         {t('identityRefreshError')}
