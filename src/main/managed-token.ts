@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, rename, rm, lstat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { validateLogin } from '../shared/contracts'
+import { validateLogin, type ManagedAccountList } from '../shared/contracts'
 
 // Electron's APIs are loaded only on demand so the storage implementation can
 // also run in ordinary Node unit tests with injected OS encryption.
@@ -34,13 +34,6 @@ export interface SecureCipher {
   getSelectedStorageBackend(): string | Promise<string>
   encryptStringAsync(value: string): Promise<Buffer>
   decryptStringAsync(data: Buffer): Promise<{ result: string; shouldReEncrypt: boolean }>
-}
-
-export interface ManagedAccountList {
-  logins: string[]
-  activeLogin: string | null
-  /** An earlier single-token encrypted file has not yet been associated with its login. */
-  legacyActive: boolean
 }
 
 type Entry = { login: string; token: string }
@@ -164,6 +157,7 @@ export class ManagedGitHubTokenStore {
   }
 
   async accounts(): Promise<ManagedAccountList> {
+    if (!(await this.available())) return { logins: [], activeLogin: null, legacyActive: false }
     const vault = await this.read()
     return {
       logins: vault.accounts.filter((item) => item.login !== LEGACY).map((item) => item.login),
