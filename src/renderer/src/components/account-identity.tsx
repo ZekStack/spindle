@@ -63,7 +63,7 @@ export function AccountIdentity() {
         status === 'authenticated' ? 'bg-emerald-500' :
           unavailable ? 'bg-neutral-500' : 'bg-amber-500'}`}/>
     </Button>
-    <DialogContent>
+    <DialogContent className="max-h-[90vh] overflow-y-auto">
       <DialogTitle className="text-xl font-semibold">{t('identityTitle')}</DialogTitle>
       <DialogDescription className="mt-2 text-sm text-[var(--muted)]">
         {t('identityDescription')}
