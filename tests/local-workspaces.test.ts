@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import {
-  existsSync, mkdirSync, mkdtempSync, readFileSync,
+  existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
   rmSync, symlinkSync, writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -70,14 +70,14 @@ test('multiple roots persist independently and removal does not delete folders',
     store.addRootFromPicker(rootA)
     store.addRootFromPicker(rootB)
     store.addRootFromPicker(rootA)
-    assert.deepEqual(new LocalWorkspaceStore(file).load().roots, [resolve(rootA), resolve(rootB)])
+    assert.deepEqual(new LocalWorkspaceStore(file).load().roots, [realpathSync.native(rootA), realpathSync.native(rootB)])
     assert.throws(() => store.removeRoot(join(dir, 'unknown')), /not found/)
-    store.removeRoot(resolve(rootA))
-    assert.deepEqual(store.load().roots, [resolve(rootB)])
+    store.removeRoot(store.load().roots[0])
+    assert.deepEqual(store.load().roots, [realpathSync.native(rootB)])
     assert.equal(existsSync(rootA), true)
     assert.equal(existsSync(rootB), true)
     assert.throws(() => store.addRootFromPicker(join(dir, 'missing')), /not available/)
-    assert.deepEqual(store.load().roots, [resolve(rootB)])
+    assert.deepEqual(store.load().roots, [realpathSync.native(rootB)])
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
