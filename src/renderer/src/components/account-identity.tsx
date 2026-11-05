@@ -25,19 +25,15 @@ export function AccountIdentity() {
   })
   const reloadIdentity = useCallback(async () => {
     const current = await window.spindle.getGitHubIdentity(true)
+    cache.clear()
     cache.setQueryData(['github-identity'], current)
-    await cache.invalidateQueries({
-      predicate: (query) => query.queryKey[0] !== 'github-identity'
-    })
   }, [cache])
   const refresh = useMutation({
     mutationFn: () => window.spindle.getGitHubIdentity(true),
     onSuccess: (current) => {
+      // Drop viewer-specific repository data immediately on account switch.
+      cache.clear()
       cache.setQueryData(['github-identity'], current)
-      // Repository permissions may have changed with the GitHub account.
-      void cache.invalidateQueries({
-        predicate: (query) => query.queryKey[0] !== 'github-identity'
-      })
     }
   })
   const signOut = useMutation({
@@ -46,10 +42,8 @@ export function AccountIdentity() {
       return window.spindle.getGitHubIdentity(true)
     },
     onSuccess: (next) => {
+      cache.clear()
       cache.setQueryData(['github-identity'], next)
-      void cache.invalidateQueries({
-        predicate: (query) => query.queryKey[0] !== 'github-identity'
-      })
     }
   })
   const current = identity.data
