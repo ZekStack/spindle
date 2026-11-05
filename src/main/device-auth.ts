@@ -24,6 +24,7 @@ const VERIFY_URL = 'https://github.com/login/device'
 export class GitHubDeviceAuth {
   private session: Session | null = null
   private pollJob: Promise<DeviceAuthProgress> | null = null
+  private generation = 0
 
   constructor(
     private readonly request: typeof fetch = fetch,
@@ -45,13 +46,14 @@ export class GitHubDeviceAuth {
     }
     const candidate = (rawClientId || process.env.SPINDLE_GITHUB_CLIENT_ID || '').trim()
     if (!validClientId(candidate)) throw new Error('A valid OAuth application client ID is required')
-    // Explicit reauthentication replaces any previous pending request, not
-    // the stored credential until GitHub confirms the replacement identity.
+    // A prior delayed device-code response must not replace a newer session.
+    const generation = ++this.generation
     this.session = null
     let response: Response
     try {
       response = await this.post(DEVICE_URL, { client_id: candidate, scope: 'repo read:org' })
     } catch { throw new Error('Unable to contact GitHub for sign-in') }
+    if (generation !== this.generation) throw new Error('Sign-in request was cancelled')
     if (!response.ok) throw new Error('GitHub did not accept the OAuth application')
     let data: Record<string, unknown>
     try { data = await response.json() as Record<string, unknown> }
@@ -67,6 +69,7 @@ export class GitHubDeviceAuth {
     }
     const interval = typeof data.interval === 'number'
       ? Math.max(5, Math.min(60, data.interval)) : 5
+    if (generation !== this.generation) throw new Error('Sign-in request was cancelled')
     const intervalMs = Math.ceil(interval) * 1000
     const now = this.now()
     this.session = {
@@ -100,7 +103,10 @@ export class GitHubDeviceAuth {
     finally { if (this.pollJob === job) this.pollJob = null }
   }
 
-  cancel(): void { this.session = null }
+  cancel(): void {
+    this.generation++
+    this.session = null
+  }
 
   async signOut(): Promise<void> {
     this.cancel()
