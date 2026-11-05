@@ -7,7 +7,7 @@ import { organizationRoute } from '../router'
 import { Button } from '../components/ui/button'
 import { Busy, Chip, ErrorState, ExternalGitHub } from '../components/common'
 import { RemoveOrganization } from '../components/remove-organization'
-import { readableDate } from '../lib/utils'
+import { readableDate, localizedGitHubError } from '../lib/utils'
 import type { Repository } from '../../../shared/contracts'
 
 function RepositoryRow({ repo, tracked }: { repo: Repository; tracked: boolean }) {
@@ -33,7 +33,7 @@ function RepositoryRow({ repo, tracked }: { repo: Repository; tracked: boolean }
         {repo.private && <LockKeyhole className="size-3.5 shrink-0 text-[var(--muted)]"/>}
       </Link>
       <p className="mt-1 truncate text-xs text-[var(--muted)]">{repo.description || repo.fullName}</p>
-      {mutation.isError && <p role="alert" className="mt-1 text-xs text-red-400">{mutation.error.message}</p>}
+      {mutation.isError && <p role="alert" className="mt-1 text-xs text-red-400">{localizedGitHubError(mutation.error, t)}</p>}
     </div>
     {repo.archived && <Chip>{t('archived')}</Chip>}
     <span className="hidden w-28 text-right text-xs text-[var(--muted)] md:block">{readableDate(repo.updatedAt, i18n.language)}</span>
