@@ -78,7 +78,8 @@ test('read-only inspection reports upstream divergence, changes, and local/remot
     git('-C', seed, 'commit', '-q', '--allow-empty', '-m', 'remote only')
     git('-C', seed, 'tag', 'remote-only')
     git('-C', seed, 'push', '-q', 'origin', 'main', '--tags')
-    git('-C', checkout, 'fetch', '-q', 'origin')
+    // Fetch branch refs without importing tags so the test has a remote-only tag.
+    git('-C', checkout, 'fetch', '-q', '--no-tags', 'origin')
     git('-C', checkout, 'mv', 'renamed-before.txt', 'renamed-after.txt')
     writeFileSync(join(checkout, 'renamed-after.txt'), 'edited\n')
     writeFileSync(join(checkout, 'sensitive-path.txt'), 'untracked\n')
