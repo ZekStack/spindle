@@ -65,7 +65,9 @@ export class WorkspaceStore {
     // Repositories are independent workspace shortcuts: an account's
     // personal repository or a repo outside saved organizations is valid.
     // IPC verifies GitHub accessibility before adding; untracking is local.
-    const fullName = `${owner}/${name}`
+    const savedOwner = state.organizations.find((org) =>
+      org.toLowerCase() === owner.toLowerCase())
+    const fullName = `${savedOwner ?? owner}/${name}`
     const existing = state.trackedRepositories.find((entry) =>
       entry.toLowerCase() === fullName.toLowerCase())
     if (tracked && !existing) state.trackedRepositories.push(fullName)
