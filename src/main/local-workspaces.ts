@@ -22,7 +22,8 @@ function key(value: string): string {
 function canonicalFolder(picked: string): string {
   if (!safePath(picked)) throw new Error('Invalid local folder')
   try {
-    const path = realpathSync(picked)
+    // Use the OS-native resolver to normalize Windows 8.3 aliases before persisting.
+    const path = realpathSync.native(picked)
     if (!safePath(path) || !statSync(path).isDirectory()) throw new Error()
     return path
   } catch {
