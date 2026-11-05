@@ -116,8 +116,19 @@ network/rate-limit/timeout errors are distinguished from permissions,
 unavailable Git and invalid checkouts, with actionable retry guidance.
 Raw subprocess output and credentials are never persisted.
 
-Persistent workspace roots and repository associations are planned for
-M3.1. Clone/fetch/pull remain unimplemented.
+**Local workspaces (M3.1):** The Workspace dashboard lets you save
+multiple root directories, independent of tracked GitHub repositories.
+On each repository page, link a user-selected existing Git checkout via
+the native directory picker. Spindle verifies the worktree root and that
+the configured GitHub `origin` matches the selected owner/repository
+(HTTPS, SSH or scp-style SSH). You may replace or unlink a checkout,
+and remove root shortcuts. These actions never move, create or delete
+local files, and never mutate GitHub. Stale/missing paths remain visible
+until relinked, rather than silently selecting a different directory.
+Locations are saved in a separate, private Electron user-data file
+(`local-workspaces.json`), without Git credentials, remote URLs or raw
+Git output. Clone/fetch/pull remain unimplemented; native OS acceptance
+for folder selection, persistence and relinking is still outstanding.
 
 ## Architecture and security
 
