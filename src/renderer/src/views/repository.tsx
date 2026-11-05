@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, GitBranch, LockKeyhole, Tag, Workflow, GitCommitHorizontal, RefreshCw } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft, GitBranch, LockKeyhole, Tag, Workflow, GitCommitHorizontal, RefreshCw, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { repositoryRoute } from '../router'
 import { Button } from '../components/ui/button'
@@ -13,6 +13,16 @@ export function RepositoryPage() {
   const { owner, name } = repositoryRoute.useParams()
   const { t, i18n } = useTranslation()
   const [tab, setTab] = useState<Tab>('overview')
+  const cache = useQueryClient()
+  const workspace = useQuery({ queryKey: ['workspace'], queryFn: () => window.spindle.getWorkspace() })
+  const tracked = workspace.data?.trackedRepositories.some((entry) =>
+    entry.toLowerCase() === `${owner}/${name}`.toLowerCase()) ?? false
+  const savedOrganization = workspace.data?.organizations.some((org) =>
+    org.toLowerCase() === owner.toLowerCase()) ?? false
+  const trackMutation = useMutation({
+    mutationFn: () => window.spindle.trackRepository(owner, name, !tracked),
+    onSuccess: (updated) => cache.setQueryData(['workspace'], updated)
+  })
   const repository = useQuery({ queryKey: ['repo', owner, name], queryFn: () => window.spindle.getRepository(owner, name) })
   const releases = useQuery({
     queryKey: ['releases', owner, name], queryFn: () => window.spindle.listReleases(owner, name),
@@ -28,9 +38,14 @@ export function RepositoryPage() {
     { key: 'workflows', label: t('workflows'), icon: Workflow }
   ]
   return <div className="space-y-6">
-    <Link to="/org/$login" params={{ login: owner }} className="inline-flex items-center gap-2 text-sm text-[var(--muted)] no-underline hover:text-orange-400">
-      <ChevronLeft className="size-4"/>{t('backToOrg')}
-    </Link>
+    {savedOrganization
+      ? <Link to="/org/$login" params={{ login: owner }}
+        className="inline-flex items-center gap-2 text-sm text-[var(--muted)] no-underline hover:text-orange-400">
+        <ChevronLeft className="size-4"/>{t('backToOrg')}
+      </Link>
+      : <Link to="/" className="inline-flex items-center gap-2 text-sm text-[var(--muted)] no-underline hover:text-orange-400">
+        <ChevronLeft className="size-4"/>{t('backToWorkspace')}
+      </Link>}
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
       <div>
         <div className="flex items-center gap-3">
@@ -39,7 +54,14 @@ export function RepositoryPage() {
         </div>
         <p className="mt-1 text-sm text-[var(--muted)]">{owner} / {name}</p>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        {trackMutation.isError && <span role="alert" className="self-center text-xs text-red-400">{t('repositoryTrackFailed')}</span>}
+        <Button variant="secondary" size="sm"
+          disabled={trackMutation.isPending || workspace.isPending}
+          onClick={() => trackMutation.mutate()}>
+          <Star className={`size-3.5 ${tracked ? 'fill-orange-500 text-orange-500' : ''}`}/>
+          {tracked ? t('untrack') : t('track')}
+        </Button>
         {repository.data && <ExternalGitHub url={repository.data.htmlUrl}/>}
         <Button variant="secondary" size="sm" onClick={() => {
           void repository.refetch()

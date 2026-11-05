@@ -28,7 +28,7 @@ test('organizations and tracked repositories are stored, restored and deduplicat
   })
 })
 
-test('removing an organization untracks its repositories without modifying GitHub', () => {
+test('removing an organization preserves independently tracked repositories', () => {
   withStore((store) => {
     store.addOrganization('ZekStack')
     store.addOrganization('ExampleOrg')
@@ -36,18 +36,46 @@ test('removing an organization untracks its repositories without modifying GitHu
     store.trackRepository('ExampleOrg', 'project', true)
     const result = store.removeOrganization('ZekStack')
     assert.deepEqual(result.organizations, ['ExampleOrg'])
-    assert.deepEqual(result.trackedRepositories, ['ExampleOrg/project'])
+    assert.deepEqual(result.trackedRepositories, ['ZekStack/tempo', 'ExampleOrg/project'])
   })
 })
 
 test('rejects path traversal, invalid state and unregistered organization', () => {
   withStore((store, file) => {
     assert.throws(() => store.addOrganization('../bad'))
-    assert.throws(() => store.trackRepository('unknown', 'repo', true), /organization/i)
+    store.trackRepository('personal-user', 'private-repo', true)
+    assert.deepEqual(store.load().trackedRepositories, ['personal-user/private-repo'])
     store.addOrganization('ZekStack')
     assert.throws(() => store.trackRepository('ZekStack', '../repo', true))
     writeFileSync(file, '{invalid json')
     assert.throws(() => store.load())
     assert.equal(readFileSync(file, 'utf8'), '{invalid json')
+  })
+})
+
+test('tracking personal and organization repositories is independent of organization membership', () => {
+  withStore((store, file) => {
+    store.trackRepository('PersonalUser', 'PrivateRepo', true)
+    store.trackRepository('AnotherOrg', 'Tool', true)
+    store.trackRepository('personaluser', 'privaterepo', true)
+    assert.deepEqual(store.load().trackedRepositories, ['PersonalUser/PrivateRepo', 'AnotherOrg/Tool'])
+    const restored = new WorkspaceStore(file).load()
+    assert.deepEqual(restored.organizations, [])
+    assert.deepEqual(restored.trackedRepositories, ['PersonalUser/PrivateRepo', 'AnotherOrg/Tool'])
+    store.trackRepository('personaluser', 'privaterepo', false)
+    assert.deepEqual(store.load().trackedRepositories, ['AnotherOrg/Tool'])
+  })
+})
+
+test('legacy workspace files remain readable and duplicate casing is normalized', () => {
+  withStore((store, file) => {
+    writeFileSync(file, JSON.stringify({
+      organizations: ['ExampleOrg', 'exampleorg'],
+      trackedRepositories: ['ExampleOrg/repo', 'exampleorg/Repo', 'PersonalUser/demo']
+    }))
+    assert.deepEqual(store.load(), {
+      organizations: ['ExampleOrg'],
+      trackedRepositories: ['ExampleOrg/repo', 'PersonalUser/demo']
+    })
   })
 })

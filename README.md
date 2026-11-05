@@ -56,17 +56,23 @@ still requires human desktop QA.
 
 ## First-use workflow
 
-1. Open Spindle's **Workspace** dashboard to view your organizations
-   and tracked repositories. Use the account button to switch saved GitHub
+1. Open Spindle's **Workspace** dashboard to view saved organizations
+   and tracked repositories. Use the account button to switch GitHub
    identities when different repositories require different permissions.
-2. Add a GitHub organization by its login name.
-3. Browse its accessible repositories. Private repositories require sufficient
-   GitHub access; anonymous browsing is limited to public resources.
-4. Star repositories to track them in your local workspace.
-5. Open a repository to inspect its metadata, recent Releases and Actions runs.
+2. Select **Add repository** to search by name or directly enter
+   `owner/repository`. Personal repositories and repositories from organizations
+   you have not added are supported. For private repositories, switch to an
+   account with access; anonymous browsing is limited to public resources.
+3. Optionally select **Add organization** to search for an organization or
+   enter its login directly, then browse its repositories and star useful ones.
+4. Open a tracked repository to inspect metadata, Releases and Actions runs,
+   or untrack it directly in the workspace. Removing an organization does
+   **not** delete its independently tracked repository shortcuts.
 
-Adding or removing an organization in Spindle only changes local preferences;
-it does not modify GitHub organizations, memberships or repositories.
+Adding/removing a saved organization and tracking/untracking a repository
+only changes local workspace preferences. It never modifies GitHub
+organizations, memberships or repositories. Repository searches use GitHub's
+API, and search results depend on the selected account's permissions.
 
 ## Architecture and security
 

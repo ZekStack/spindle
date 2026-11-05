@@ -159,9 +159,15 @@ M0 release gates or certify the updater for public production deployment.
       hero, expanded desktop content to usable viewport width, and added
       local tracked-repository shortcuts, organization browsing and search.
       Preserve empty states without invented metrics or marketing content.
-- [ ] **M1.3 — Repository onboarding.** Add/remove organizations and
-      individual repositories, including personal repositories, via search
-      and pickers. Distinguish untracking locally from modifying GitHub.
+- [x] **M1.3 — Repository onboarding.** Users can search GitHub
+      organizations in the add-organization dialog, or add them by login;
+      search accessible repositories by name, or directly enter any
+      `owner/repository` (including personal and private repositories with
+      appropriate credentials). Repository tracking no longer requires an
+      organization, and local untracking is available on workspace/repository
+      screens. Removing an organization preserves independent tracked
+      shortcuts. All operations are local preferences; GitHub resources are
+      never changed. Pagination/discovery refinements continue in M1.4.
 - [ ] **M1.4 — Discovery quality.** Pagination, search, private/archived
       indicators, accessible-org discovery and helpful 401/403/404/rate-limit
       states. Support multiple unrelated organizations at once.

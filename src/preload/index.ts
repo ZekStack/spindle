@@ -10,7 +10,9 @@ const api: SpindleApi = {
   trackRepository: (owner, name, tracked) =>
     ipcRenderer.invoke('spindle:workspace:track-repo', owner, name, tracked),
   getOrganization: (login) => ipcRenderer.invoke('spindle:github:organization', login),
+  searchOrganizations: (query, page) => ipcRenderer.invoke('spindle:github:search-orgs', query, page),
   listRepositories: (login, page) => ipcRenderer.invoke('spindle:github:repositories', login, page),
+  searchRepositories: (query, page) => ipcRenderer.invoke('spindle:github:search-repos', query, page),
   getRepository: (owner, name) => ipcRenderer.invoke('spindle:github:repository', owner, name),
   listReleases: (owner, name) => ipcRenderer.invoke('spindle:github:releases', owner, name),
   listWorkflowRuns: (owner, name) => ipcRenderer.invoke('spindle:github:runs', owner, name),

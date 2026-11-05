@@ -2,8 +2,10 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { managedGitHubToken } from './managed-token'
 import {
-  LOGIN_PATTERN, validateLogin, validatePage, validateRepository,
-  type AuthStatus, type GitHubIdentity, type Organization, type Release, type Repository, type WorkflowRun
+  LOGIN_PATTERN, validateLogin, validatePage, validateRepository, validateRepositorySearch,
+  validateOrganizationSearch,
+  type AuthStatus, type GitHubIdentity, type Organization, type OrganizationSuggestion,
+  type Release, type Repository, type WorkflowRun
 } from '../shared/contracts'
 
 const execFileAsync = promisify(execFile)
@@ -139,6 +141,17 @@ export class GitHubClient {
     return { login: org.login, name: org.name, avatarUrl: org.avatar_url,
       description: org.description, htmlUrl: org.html_url, publicRepos: org.public_repos }
   }
+  async searchOrganizations(queryValue: string, pageValue: number): Promise<OrganizationSuggestion[]> {
+    const query = validateOrganizationSearch(queryValue)
+    const page = validatePage(pageValue)
+    const q = encodeURIComponent(`${query} in:login type:org`)
+    const response = await this.request<{ items: Array<{ login: string; avatar_url: string | null }> }>(
+      `/search/users?q=${q}&per_page=20&page=${page}`
+    )
+    return response.items.filter((item) => LOGIN_PATTERN.test(item.login))
+      .map((item) => ({ login: item.login, avatarUrl: item.avatar_url }))
+  }
+
   async repositories(value: string, pageValue: number): Promise<Repository[]> {
     const org = validateLogin(value)
     const page = validatePage(pageValue)
@@ -149,6 +162,16 @@ export class GitHubClient {
     }>>(`/orgs/${encodeURIComponent(org)}/repos?per_page=100&page=${page}&sort=full_name&direction=asc&type=all`)
     return result.map(toRepository)
   }
+  async searchRepositories(queryValue: string, pageValue: number): Promise<Repository[]> {
+    const query = validateRepositorySearch(queryValue)
+    const page = validatePage(pageValue)
+    const search = encodeURIComponent(`${query} in:name`)
+    const response = await this.request<{ items: RemoteRepository[] }>(
+      `/search/repositories?q=${search}&per_page=20&page=${page}`
+    )
+    return response.items.map(toRepository)
+  }
+
   async repository(ownerValue: string, nameValue: string): Promise<Repository> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)

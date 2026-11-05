@@ -43,11 +43,21 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   })
   handle('spindle:workspace:remove-org', (login: string) => store.removeOrganization(login))
   handle('spindle:workspace:track-repo', async (owner: string, name: string, tracked: boolean) => {
-    if (tracked) await github.repository(validateLogin(owner), validateRepository(name))
-    return store.trackRepository(owner, name, tracked)
+    const safeOwner = validateLogin(owner)
+    const safeName = validateRepository(name)
+    if (tracked === true) {
+      // Store the verified canonical GitHub owner/name. No organization
+      // registration is necessary, including for personal repositories.
+      const repo = await github.repository(safeOwner, safeName)
+      const parts = repo.fullName.split('/')
+      return store.trackRepository(parts[0], parts[1], true)
+    }
+    return store.trackRepository(safeOwner, safeName, tracked)
   })
   handle('spindle:github:organization', (login: string) => github.organization(login))
+  handle('spindle:github:search-orgs', (query: string, page: number) => github.searchOrganizations(query, page))
   handle('spindle:github:repositories', (login: string, page: number) => github.repositories(login, page))
+  handle('spindle:github:search-repos', (query: string, page: number) => github.searchRepositories(query, page))
   handle('spindle:github:repository', (owner: string, name: string) => github.repository(owner, name))
   handle('spindle:github:releases', (owner: string, name: string) => github.releases(owner, name))
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
