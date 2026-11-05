@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { managedGitHubToken } from './managed-token'
 import {
   LOGIN_PATTERN, validateLogin, validatePage, validateRepository,
   type AuthStatus, type GitHubIdentity, type Organization, type Release, type Repository, type WorkflowRun
@@ -13,6 +14,10 @@ type Credentials = { token?: string; method: AuthStatus['method'] }
 export class GitHubCredentials {
   private cache: { value: Credentials; until: number } | null = null
   async get(): Promise<Credentials> {
+    // A deliberate in-app sign-in owns the active identity, but never
+    // modifies the user's external GitHub CLI or environment credentials.
+    const managed = await managedGitHubToken.load()
+    if (managed) return { token: managed, method: 'spindle' }
     const env = (process.env.GH_TOKEN || process.env.GITHUB_TOKEN)?.trim()
     if (env) return { token: env, method: 'environment' }
     if (this.cache && Date.now() < this.cache.until) return this.cache.value
