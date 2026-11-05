@@ -97,9 +97,15 @@ A compact history of up to 100 operations is stored in
 preferences. Jobs still running when the app quits are marked
 **Interrupted** when it restarts; they are not falsely marked successful.
 Only safe progress summaries are persisted, never GitHub tokens or raw API
-response bodies. The initial feature is read-only; future Git clone/fetch/
-pull operations will use the same main-process activity model once the M2.2
-child-process scheduler is implemented.
+response bodies. The Activity dialog also provides **Inspect local Git folder**. Its native
+directory picker selects an existing Git checkout; the main-process job
+discovers Git and the working tree, reports the branch and staged/modified/
+untracked counts, and supports cancellation and retry. Jobs use argument-
+array child processes with bounded output, no shell or credential prompts.
+Git filenames, remotes and process error text are never put in Activity
+history. The selected local directory is retained in the private Activity
+history for retry; persistent workspace roots and repository associations
+are planned for M3.1. Clone/fetch/pull remain unimplemented.
 
 ## Architecture and security
 
