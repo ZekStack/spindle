@@ -19,6 +19,10 @@ function errorKey(code: JobErrorCode | null, localGit = false): string {
     case 'git-unavailable': return 'activityGitUnavailable'
     case 'git-failed': return 'activityLocalGitFailed'
     case 'output-limit': return 'activityErrorOutputLimit'
+    case 'tag-stale': return 'tagErrorStale'
+    case 'tag-exists': return 'tagErrorExists'
+    case 'tag-missing': return 'tagErrorMissing'
+    case 'tag-partial': return 'tagErrorPartial'
     case 'checkout-moved': return 'localSafety_checkout-moved'
     case 'origin-mismatch': return 'localSafety_origin-mismatch'
     case 'detached-head': return 'localSafety_detached-head'
@@ -67,7 +71,8 @@ export function ActivityDialog() {
   const labelFor = (job: JobRecord) => t(job.kind === 'local-git-inspection'
     ? 'activityLocalInspection' : job.kind === 'local-git-clone' ? 'activityClone'
       : job.kind === 'local-git-fetch' ? 'activityFetch'
-        : job.kind === 'local-git-pull' ? 'activityPull' : 'activityInspection')
+        : job.kind === 'local-git-pull' ? 'activityPull'
+          : job.kind === 'local-git-tag' ? 'activityTag' : 'activityInspection')
 
   async function inspectLocal() {
     setBusy(true)
@@ -160,6 +165,17 @@ export function ActivityDialog() {
               <p className="mt-1 text-xs text-[var(--muted)]">
                 {labelFor(detail)} · {t(`activityPhase_${detail.phase}`)}
               </p>
+              {detail.tagOperation && <p className="mt-2 break-all text-xs text-[var(--muted)]">
+                {t(detail.tagOperation.action === 'create' ? 'tagsCreate'
+                  : detail.tagOperation.action === 'push' ? 'tagsPush'
+                    : detail.tagOperation.action === 'delete-local' ? 'tagsDeleteLocal'
+                      : detail.tagOperation.action === 'delete-origin' ? 'tagsDeleteOrigin'
+                        : 'tagsDeleteBoth')}: {detail.tagOperation.tag}
+              </p>}
+              {detail.tagRemoteDeleted && detail.phase === 'partial' &&
+                <p role="alert" className="mt-2 text-xs text-amber-400">
+                  {t('tagErrorPartial')}
+                </p>}
               {detail.location && <p className="mt-1 break-all text-xs text-[var(--muted)]">
                 {detail.location}
               </p>}
