@@ -26,7 +26,9 @@ export function AccountIdentity() {
     onSuccess: (current) => {
       cache.setQueryData(['github-identity'], current)
       // Repository permissions may have changed with the GitHub account.
-      void cache.invalidateQueries({ queryKey: ['workspace'] })
+      void cache.invalidateQueries({
+        predicate: (query) => query.queryKey[0] !== 'github-identity'
+      })
     }
   })
   const current = identity.data
