@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { GitHubClient } from './github'
 import { githubDeviceAuth } from './device-auth'
+import { managedGitHubToken } from './managed-token'
 import { WorkspaceStore } from './store'
 import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
@@ -56,6 +57,15 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:auth:device-start', (clientId?: string) => githubDeviceAuth.start(clientId))
   handle('spindle:auth:device-poll', () => githubDeviceAuth.poll())
   handle('spindle:auth:device-cancel', () => githubDeviceAuth.cancel())
+  handle('spindle:auth:accounts', () => managedGitHubToken.accounts())
+  handle('spindle:auth:select-account', async (login: string | null) => {
+    githubDeviceAuth.cancel()
+    return managedGitHubToken.select(login)
+  })
+  handle('spindle:auth:remove-account', async (login: string) => {
+    githubDeviceAuth.cancel()
+    return managedGitHubToken.remove(login)
+  })
   handle('spindle:auth:managed-signout', () => githubDeviceAuth.signOut())
   handle('spindle:github:open', async (url: string) => { await shell.openExternal(parseGitHubUrl(url)) })
   handle('spindle:update:state', () => updates.snapshot())
