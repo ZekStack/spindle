@@ -90,6 +90,7 @@ export interface SpindleApi {
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>
   getOrganization(login: string): Promise<Organization>
   listRepositories(login: string, page: number): Promise<Repository[]>
+  searchRepositories(query: string, page: number): Promise<Repository[]>
   getRepository(owner: string, name: string): Promise<Repository>
   listReleases(owner: string, name: string): Promise<Release[]>
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
@@ -124,6 +125,22 @@ export function validateRepository(value: unknown): string {
       value === '.' || value === '..') throw new Error('Invalid repository name')
   return value.trim()
 }
+/** Treat search input only as repository-name text, never GitHub qualifiers. */
+export function validateRepositorySearch(value: unknown): string {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9_. -]{2,80}$/.test(value.trim())) {
+    throw new Error('Enter a repository name (2–80 characters)')
+  }
+  return value.trim()
+}
+
+/** A direct owner/repository path, also valid for personal repositories. */
+export function parseRepositoryFullName(value: unknown): { owner: string; name: string } {
+  if (typeof value !== 'string') throw new Error('Expected owner/repository')
+  const parts = value.trim().split('/')
+  if (parts.length !== 2) throw new Error('Expected owner/repository')
+  return { owner: validateLogin(parts[0]), name: validateRepository(parts[1]) }
+}
+
 export function validatePage(value: unknown): number {
   if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 1000) {
     throw new Error('Invalid page number')
