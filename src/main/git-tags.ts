@@ -1,7 +1,7 @@
 import { runGit, GitProcessError } from './git-process'
 import { runRemoteGit, GitSafetyError } from './git-safety'
 import { validateSyncCheckout } from './git-sync'
-import type { LocalWorkspaceStore } from './local-workspaces'
+import { githubOriginRepository, type LocalWorkspaceStore } from './local-workspaces'
 import {
   MAX_TAG_ENTRIES, TAG_OID_PATTERN, validateTagMutation, validateTagName,
   type GitTagsSnapshot, type GitTagEntry, type GitTagRef, type TagMutationRequest
@@ -65,6 +65,24 @@ async function remoteTagOid(path: string, tag: string, signal: AbortSignal): Pro
   const raw = await runRemoteGit(['-C', path, 'ls-remote', '--tags', '--refs',
     'origin', refName(tag)], signal)
   return parseRemote(raw).get(tag)?.oid ?? null
+}
+
+/** Reject an explicit origin.pushurl targeting another repository. */
+async function assertPushTarget(path: string, repository: string, signal: AbortSignal): Promise<void> {
+  let urls: string
+  try {
+    urls = await runGit(['-C', path, 'config', '--get-all', 'remote.origin.pushurl'], signal)
+  } catch (error) {
+    if (signal.aborted || !(error instanceof GitProcessError) || error.reason !== 'failed') throw error
+    return // No pushurl: Git uses the already-verified origin URL.
+  }
+  // A pushurl takes precedence over the origin fetch URL. Never accept a
+  // configured push destination pointing at a different GitHub repository.
+  if (!urls.trim() || urls.trimEnd().split('\n').some(url =>
+    githubOriginRepository(url)?.toLowerCase() !== repository.toLowerCase())) {
+    throw new GitSafetyError('origin-mismatch',
+      'Origin push destination does not match the linked GitHub repository.')
+  }
 }
 
 async function currentHead(path: string, signal: AbortSignal): Promise<string | null> {
@@ -149,6 +167,7 @@ export async function mutateGitTag(
   }
 
   if (request.action === 'push') {
+    await assertPushTarget(path, repository, signal)
     const remote = await remoteTagOid(path, request.tag, signal)
     if (remote) throw new TagLifecycleError('tag-exists', 'Origin tag already exists. No overwrite performed.')
     progress('Publishing tag to origin without force.', 55)
@@ -167,6 +186,7 @@ export async function mutateGitTag(
   }
 
   if (request.action === 'delete-origin' || request.action === 'delete-both') {
+    await assertPushTarget(path, repository, signal)
     progress('Deleting only the confirmed origin tag with a lease.', 55)
     await runRemoteGit(['-C', path, 'push', '--porcelain',
       `--force-with-lease=${ref}:${request.expectedOriginOid}`,
