@@ -285,6 +285,27 @@ state after a process restart.
 - [ ] **M3.4 — Safety.** Refuse destructive operations when the worktree
       is dirty unless the user explicitly chooses a supported safe action.
       Handle detached HEAD, conflicts, authentication and network failures.
+      Engineering work: [x] advisory typed pull readiness shown before
+      confirmation and rechecked by the serialized main-process job;
+      [x] reject staged, modified, untracked and conflicted trees; [x] detect
+      unfinished merge/rebase/cherry-pick/revert operations; [x] reject
+      detached HEAD, missing/mismatched upstream, changed origin, moved
+      checkout and divergent histories; [x] fetch is explicitly available
+      as a non-worktree-mutating alternative even when pull is blocked;
+      [x] use a separate fetch followed by a revalidated fast-forward-only
+      merge, never auto-stash, discard, reset, rebase, or silently resolve
+      conflicts; [x] classify known Git transport authentication/network
+      errors without persisting raw stderr or credential-bearing URLs;
+      [x] record fixed safe failure codes in Activity and localize the
+      English/Hungarian feedback; [x] real synthetic Git fixtures cover
+      dirty worktrees, detached HEAD, upstream state, divergence,
+      interrupted operations and unresolved conflicts on CI.
+      **Remaining acceptance:** real Linux Mint/Windows installed checkout
+      and credential-helper testing; verify local changes and conflicts
+      survive cancellation/restart, an offline fetch fails visibly, a
+      private-origin authentication failure is actionable, and that no
+      unintended worktree edits occur. No destructive override is offered;
+      users resolve changes with their own Git client before pulling.
 
 **Exit gate:** clone an arbitrary public/private repository to a user-chosen
 folder, fetch/pull it, and accurately show local versus remote state.
