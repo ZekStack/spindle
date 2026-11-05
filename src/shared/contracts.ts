@@ -44,7 +44,7 @@ export interface WorkflowRun {
   htmlUrl: string
 }
 export interface AuthStatus {
-  method: 'github-cli' | 'environment' | 'anonymous'
+  method: 'spindle' | 'github-cli' | 'environment' | 'anonymous'
 }
 
 /** Safe account information: credentials and raw API responses stay in main. */
@@ -60,6 +60,23 @@ export interface GitHubIdentity {
   /** OAuth scopes, when reported by GitHub; null for unreported/fine-grained permissions. */
   scopes: string[] | null
 }
+/** Public device-flow details only: the secret device code never leaves main. */
+export interface DeviceAuthSetup {
+  secureStorage: boolean
+  configuredClientId: string | null
+}
+export interface DeviceAuthStart {
+  userCode: string
+  verificationUrl: string
+  expiresAt: number
+  nextPollAt: number
+}
+export interface DeviceAuthProgress {
+  phase: 'pending' | 'complete' | 'cancelled' | 'expired' | 'denied' | 'failed'
+  nextPollAt: number | null
+  networkError?: boolean
+}
+
 export interface SpindleApi {
   getWorkspace(): Promise<Workspace>
   addOrganization(login: string): Promise<Workspace>
@@ -72,6 +89,11 @@ export interface SpindleApi {
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
   getAuthStatus(): Promise<AuthStatus>
   getGitHubIdentity(refresh?: boolean): Promise<GitHubIdentity>
+  getDeviceAuthSetup(): Promise<DeviceAuthSetup>
+  startDeviceAuth(clientId?: string): Promise<DeviceAuthStart>
+  pollDeviceAuth(): Promise<DeviceAuthProgress>
+  cancelDeviceAuth(): Promise<void>
+  signOutManagedGitHub(): Promise<void>
   openGitHub(url: string): Promise<void>
   getUpdateStatus(): Promise<UpdateStatus>
   checkForUpdates(): Promise<UpdateStatus>
