@@ -106,7 +106,8 @@ test('link and relink require matching actual Git origin and preserve associatio
 test('non-Git folders and missing or malicious Git origins fail closed', async () => {
   const dir = folder()
   try {
-    const store = new LocalWorkspaceStore(join(dir, 'locations.json'))
+    const file = join(dir, 'locations.json')
+    const store = new LocalWorkspaceStore(file)
     const noRemote = join(dir, 'no-remote')
     mkdirSync(noRemote)
     git(noRemote, 'init', '-q')
@@ -114,11 +115,9 @@ test('non-Git folders and missing or malicious Git origins fail closed', async (
     git(noRemote, 'remote', 'add', 'origin',
       'https://person:topsecret@github.com/ExampleOrg/project.git')
     await assert.rejects(store.linkFromPicker('ExampleOrg/project', noRemote), /origin/)
-    assert.equal(readFileSync(join(dir, 'locations.json'), 'utf8').includes('secret'), false)
-  } catch (error) {
-    // The store must not create any file when every association is invalid.
-    if (!existsSync(join(dir, 'locations.json'))) return
-    throw error
+    // Invalid remote URLs and embedded credentials never reach persisted JSON.
+    assert.equal(existsSync(file), false)
+    assert.deepEqual(store.load().repositories, [])
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
