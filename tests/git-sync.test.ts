@@ -14,6 +14,10 @@ function git(...args: string[]): string {
   return execFileSync('git', args, { encoding: 'utf8', timeout: 20_000 }).trim()
 }
 
+function fileText(path: string): string {
+  return readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+}
+
 async function eventually(ready: () => boolean): Promise<void> {
   for (let i = 0; i < 150; i++) {
     if (ready()) return
@@ -67,14 +71,14 @@ test('clone and sync use saved roots, validated GitHub origins, and ff-only pull
     git('-C', seed, 'commit', '-q', '-m', 'Second commit')
     git('-C', seed, 'push', '-q', 'origin', 'main')
     await syncCheckout(store, 'ExampleOrg/project', 'fetch', new AbortController().signal, () => {})
-    assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), 'first\n')
+    assert.equal(fileText(join(target, 'README.md')), 'first\n')
     await syncCheckout(store, 'ExampleOrg/project', 'pull', new AbortController().signal, () => {})
-    assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), 'second\n')
+    assert.equal(fileText(join(target, 'README.md')), 'second\n')
 
     writeFileSync(join(target, 'README.md'), 'local changes\n')
     await assert.rejects(syncCheckout(store, 'ExampleOrg/project', 'pull',
       new AbortController().signal, () => {}), /clean/)
-    assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), 'local changes\n')
+    assert.equal(fileText(join(target, 'README.md')), 'local changes\n')
     git('-C', target, 'checkout', '--', 'README.md')
     git('-C', target, 'checkout', '--detach', '-q', 'HEAD')
     await assert.rejects(validateSyncCheckout(store, 'ExampleOrg/project',
@@ -85,7 +89,7 @@ test('clone and sync use saved roots, validated GitHub origins, and ff-only pull
     other.addRootFromPicker(root)
     await assert.rejects(cloneCheckout(other, 'ExampleOrg/project', target,
       new AbortController().signal, () => {}), /already exists/)
-    assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), 'second\n')
+    assert.equal(fileText(join(target, 'README.md')), 'second\n')
     assert.throws(() => store.cloneDestination('ExampleOrg/project', join(root, 'unknown')))
   } finally {
     for (const [name, value] of [
