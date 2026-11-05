@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { managedGitHubToken } from './managed-token'
 import {
-  LOGIN_PATTERN, validateLogin, validatePage, validateRepository,
+  LOGIN_PATTERN, validateLogin, validatePage, validateRepository, validateRepositorySearch,
   type AuthStatus, type GitHubIdentity, type Organization, type Release, type Repository, type WorkflowRun
 } from '../shared/contracts'
 
@@ -149,6 +149,16 @@ export class GitHubClient {
     }>>(`/orgs/${encodeURIComponent(org)}/repos?per_page=100&page=${page}&sort=full_name&direction=asc&type=all`)
     return result.map(toRepository)
   }
+  async searchRepositories(queryValue: string, pageValue: number): Promise<Repository[]> {
+    const query = validateRepositorySearch(queryValue)
+    const page = validatePage(pageValue)
+    const search = encodeURIComponent(`${query} in:name`)
+    const response = await this.request<{ items: RemoteRepository[] }>(
+      `/search/repositories?q=${search}&per_page=20&page=${page}`
+    )
+    return response.items.map(toRepository)
+  }
+
   async repository(ownerValue: string, nameValue: string): Promise<Repository> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)
