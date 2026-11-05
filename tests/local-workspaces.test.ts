@@ -147,6 +147,17 @@ test('corrupt workspace preferences are never overwritten and missing paths rema
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('native directory paths deduplicate Git and Node Windows aliases', () => {
+  const dir = folder()
+  try {
+    const path = checkout(dir, 'same-worktree', 'https://github.com/ExampleOrg/project.git')
+    const store = new LocalWorkspaceStore(join(dir, 'locations.json'))
+    store.addRootFromPicker(path)
+    store.addRootFromPicker(gitTop(path))
+    assert.equal(store.load().roots.length, 1)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
 test('symlink-selected folders resolve to the same single stored location', () => {
   if (process.platform === 'win32') return // Unprivileged symlink creation is not universal.
   const dir = folder()
