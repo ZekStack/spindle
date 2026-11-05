@@ -111,11 +111,13 @@ export function RepositoryCheckout({ owner, name }: { owner: string; name: strin
     finally { setBusy(false) }
   }
   async function unlink() {
-    await mutate(() => window.spindle.unlinkRepositoryFolder(owner, name))
-    // If mutation failed, keep the confirmation visible.
-    const after = await client.fetchQuery({ queryKey: KEY, queryFn: () => window.spindle.getLocalWorkspaces() })
-    if (!after.repositories.some((entry) => entry.repository.toLowerCase() ===
-        `${owner}/${name}`.toLowerCase())) setUnlinkOpen(false)
+    setBusy(true); setError(false)
+    try {
+      const updated = await window.spindle.unlinkRepositoryFolder(owner, name)
+      client.setQueryData(KEY, updated)
+      setUnlinkOpen(false)
+    } catch { setError(true) }
+    finally { setBusy(false) }
   }
   async function inspect() {
     setBusy(true); setError(false)
