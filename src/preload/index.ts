@@ -15,6 +15,7 @@ const api: SpindleApi = {
   listReleases: (owner, name) => ipcRenderer.invoke('spindle:github:releases', owner, name),
   listWorkflowRuns: (owner, name) => ipcRenderer.invoke('spindle:github:runs', owner, name),
   getAuthStatus: () => ipcRenderer.invoke('spindle:auth:status'),
+  getGitHubIdentity: (refresh = false) => ipcRenderer.invoke('spindle:auth:identity', refresh),
   openGitHub: (url) => ipcRenderer.invoke('spindle:github:open', url),
   getUpdateStatus: () => ipcRenderer.invoke('spindle:update:state'),
   checkForUpdates: () => ipcRenderer.invoke('spindle:update:check'),
