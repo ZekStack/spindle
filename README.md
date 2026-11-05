@@ -8,8 +8,9 @@ GitHub organizations into one desktop workspace. Add the organizations and
 repositories you want to follow without a predefined catalog.
 
 > **Status: R1 foundation (early development).** The UI can currently discover,
-> track and inspect repositories, releases and workflow runs. It does **not yet**
-> create tags, publish releases, dispatch workflows or run local Git commands.
+> track and inspect repositories, releases and workflow runs, and inspect
+> local Git checkouts. It does **not yet** create tags, publish releases,
+> dispatch workflows, or clone/fetch/pull local repositories.
 
 ## Stack
 
