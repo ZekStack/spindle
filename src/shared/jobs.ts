@@ -1,5 +1,6 @@
 /** Safe, serializable operation data. No token, request header or raw command output. */
-export type JobKind = 'repository-inspection' | 'local-git-inspection'
+export type JobKind = 'repository-inspection' | 'local-git-inspection' |
+  'local-git-clone' | 'local-git-fetch' | 'local-git-pull'
 export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
 export type JobErrorCode = 'auth' | 'forbidden' | 'not-found' | 'rate-limit' | 'network' |
   'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' | 'unknown'
@@ -10,7 +11,7 @@ export interface JobRecord {
   repository: string
   /** Canonical folder selected using Electron's native picker; local jobs only. */
   location?: string
-  action: 'inspect'
+  action: 'inspect' | 'clone' | 'fetch' | 'pull'
   requestedAt: string
   startedAt: string | null
   finishedAt: string | null
