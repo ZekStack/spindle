@@ -19,6 +19,15 @@ function errorKey(code: JobErrorCode | null): string {
     case 'git-unavailable': return 'activityGitUnavailable'
     case 'git-failed': return 'activityLocalGitFailed'
     case 'output-limit': return 'activityErrorOutputLimit'
+    case 'checkout-moved': return 'localSafety_checkout-moved'
+    case 'origin-mismatch': return 'localSafety_origin-mismatch'
+    case 'detached-head': return 'localSafety_detached-head'
+    case 'upstream-missing': return 'localSafety_upstream-missing'
+    case 'upstream-mismatch': return 'localSafety_upstream-mismatch'
+    case 'operation-in-progress': return 'localSafety_operation-in-progress'
+    case 'conflicted': return 'localSafety_conflicted'
+    case 'dirty-worktree': return 'localSafety_dirty-worktree'
+    case 'diverged': return 'localSafety_diverged'
     default: return 'activityErrorUnknown'
   }
 }
