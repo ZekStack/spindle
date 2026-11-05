@@ -47,7 +47,7 @@ export function LinkedInspection({
 
   return <section className="mt-4 border-t border-[var(--border)] pt-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="text-sm font-semibold">{t('gitSnapshotTitle')}</h3>
+      <h3 className="text-sm font-semibold">{t('activityLocalInspection')}</h3>
       <Button variant="secondary" size="sm" disabled={busy || inspecting}
         onClick={() => void inspect()}>
         <RotateCcw className="size-3.5"/>{t('gitSnapshotRefresh')}
@@ -63,9 +63,9 @@ export function LinkedInspection({
       <p role="status" className="mt-2 text-xs text-[var(--muted)]">{t('gitSnapshotFailed')}</p>}
     {snapshot ? <>
       <GitInspectionView data={snapshot}/>
-      <p className="mt-2 text-xs text-[var(--muted)]">
-        {t(stale ? 'gitSnapshotMayBeStale' : 'gitSnapshotMayBeStale')}
-      </p>
+      {stale && <p className="mt-2 text-xs text-[var(--muted)]">
+        {t('gitSnapshotMayBeStale')}
+      </p>}
     </> : !inspecting &&
       <p className="mt-3 text-xs text-[var(--muted)]">{t('gitSnapshotNoData')}</p>}
   </section>
