@@ -5,6 +5,10 @@ export interface Workspace {
   organizations: string[]
   trackedRepositories: string[]
 }
+export interface OrganizationSuggestion {
+  login: string
+  avatarUrl: string | null
+}
 export interface Organization {
   login: string
   name: string | null
@@ -89,6 +93,7 @@ export interface SpindleApi {
   removeOrganization(login: string): Promise<Workspace>
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>
   getOrganization(login: string): Promise<Organization>
+  searchOrganizations(query: string, page: number): Promise<OrganizationSuggestion[]>
   listRepositories(login: string, page: number): Promise<Repository[]>
   searchRepositories(query: string, page: number): Promise<Repository[]>
   getRepository(owner: string, name: string): Promise<Repository>
@@ -126,6 +131,13 @@ export function validateRepository(value: unknown): string {
   return value.trim()
 }
 /** Treat search input only as repository-name text, never GitHub qualifiers. */
+export function validateOrganizationSearch(value: unknown): string {
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9-]{2,39}$/.test(value.trim())) {
+    throw new Error('Enter at least two organization name characters')
+  }
+  return value.trim()
+}
+
 export function validateRepositorySearch(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-zA-Z0-9_. -]{2,80}$/.test(value.trim())) {
     throw new Error('Enter a repository name (2–80 characters)')
