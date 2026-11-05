@@ -80,7 +80,7 @@ export function RepositoryPage() {
         {inspectionError && <span role="alert" className="self-center text-xs text-red-400">
           {t('activityFailed')}
         </span>}
-        {repository.data && <ExternalGitHub url={repository.data.htmlUrl}/>
+        {repository.data && <ExternalGitHub url={repository.data.htmlUrl}/>}
         <Button variant="secondary" size="sm" onClick={() => {
           void repository.refetch()
           if (tab === 'releases') void releases.refetch()
