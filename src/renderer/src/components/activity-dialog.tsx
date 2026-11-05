@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, CircleCheck, CircleX, FolderOpen, LoaderCircle
 import { useTranslation } from 'react-i18next'
 import { activeJob, type JobErrorCode, type JobRecord } from '../../../shared/jobs'
 import { Button } from './ui/button'
+import { GitInspectionView } from './git-inspection-view'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 
 type Filter = 'active' | 'history'
@@ -181,6 +182,7 @@ export function ActivityDialog() {
                 {detail.output.map((line, index) =>
                   <p key={index} className="break-words font-mono text-xs text-[var(--muted)]">{line}</p>)}
               </div>
+              {detail.inspection && <GitInspectionView data={detail.inspection}/>}
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 {activeJob(detail.phase) ? <Button variant="secondary" size="sm" disabled={busy}
                   onClick={() => void cancel(detail.id)}>
