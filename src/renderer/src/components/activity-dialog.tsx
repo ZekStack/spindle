@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, CircleCheck, CircleX, LoaderCircle, RefreshCw, XCircle } from 'lucide-react'
+import { Activity, CircleCheck, CircleX, FolderOpen, LoaderCircle, RefreshCw, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { activeJob, type JobErrorCode, type JobRecord } from '../../../shared/jobs'
 import { Button } from './ui/button'
@@ -52,6 +52,19 @@ export function ActivityDialog() {
   const filtered = jobs.filter((job) => filter === 'active' ? activeJob(job.phase) : !activeJob(job.phase))
   const detail = jobs.find((job) => job.id === selected) ?? filtered[0] ?? null
 
+  async function inspectLocal() {
+    setBusy(true)
+    setFailure(false)
+    try {
+      const next = await window.spindle.pickLocalGitFolder()
+      if (next) {
+        setSelected(next.id)
+        setFilter('active')
+      }
+    } catch { setFailure(true) }
+    finally { setBusy(false) }
+  }
+
   async function cancel(id: string) {
     setBusy(true)
     setFailure(false)
@@ -63,8 +76,12 @@ export function ActivityDialog() {
     setBusy(true)
     setFailure(false)
     try {
-      const [owner, name] = job.repository.split('/')
-      const next = await window.spindle.inspectRepository(owner, name)
+      const next = job.kind === 'local-git-inspection'
+        ? await window.spindle.retryLocalGitJob(job.id)
+        : await (async () => {
+          const [owner, name] = job.repository.split('/')
+          return window.spindle.inspectRepository(owner, name)
+        })()
       setSelected(next.id)
       setFilter('active')
     } catch { setFailure(true) }
@@ -85,7 +102,11 @@ export function ActivityDialog() {
         <DialogDescription className="mt-1 text-xs text-[var(--muted)]">
           {t('activityDescription')}
         </DialogDescription>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" disabled={busy}
+            onClick={() => void inspectLocal()}>
+            <FolderOpen className="size-3.5"/>{t('activityInspectLocal')}
+          </Button>
           <Button variant={filter === 'active' ? 'default' : 'secondary'} size="sm"
             onClick={() => { setFilter('active'); setSelected(null) }}>
             {t('activityRunning')} ({runningCount})
@@ -111,7 +132,8 @@ export function ActivityDialog() {
                 <span className="min-w-0 flex-1 truncate">{job.repository}</span>
               </div>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                {t('activityInspection')} · {t(`activityPhase_${job.phase}`)}
+                {t(job.kind === 'local-git-inspection'
+                  ? 'activityLocalInspection' : 'activityInspection')} · {t(`activityPhase_${job.phase}`)}
               </p>
             </button>)}
           </div>
@@ -119,8 +141,12 @@ export function ActivityDialog() {
             {!detail ? <p className="text-sm text-[var(--muted)]">{t('activitySelect')}</p> : <>
               <h3 className="break-all text-sm font-semibold">{detail.repository}</h3>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                {t('activityInspection')} · {t(`activityPhase_${detail.phase}`)}
+                {t(detail.kind === 'local-git-inspection'
+                  ? 'activityLocalInspection' : 'activityInspection')} · {t(`activityPhase_${detail.phase}`)}
               </p>
+              {detail.location && <p className="mt-1 break-all text-xs text-[var(--muted)]">
+                {detail.location}
+              </p> 
               <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"
                 role="progressbar" aria-label={t('activityProgress')} aria-valuemin={0}
                 aria-valuemax={100} aria-valuenow={detail.progress}>
@@ -132,7 +158,10 @@ export function ActivityDialog() {
                   : t('activityNotStarted')}
               </p>
               {detail.errorCode && <p role="alert" className="mt-3 text-sm text-red-400">
-                {t(errorKey(detail.errorCode))}
+                {detail.kind === 'local-git-inspection'
+                  ? t(detail.errorCode === 'not-found'
+                    ? 'activityGitUnavailable' : 'activityLocalGitFailed')
+                  : t(errorKey(detail.errorCode))}
               </p>}
               <div className="mt-4 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3"
                 aria-label={t('activityOutput')}>
