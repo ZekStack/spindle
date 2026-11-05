@@ -33,8 +33,9 @@ test('discovers arbitrary GitHub organizations and repositories without an allow
   })
   assert.equal((await client.organization('OtherOrg')).name, 'Other Org')
   const results = await client.repositories('OtherOrg', 2)
-  assert.equal(results[0].fullName, 'OtherOrg/repo')
-  assert.equal(results[0].private, true)
+  assert.equal(results.items[0].fullName, 'OtherOrg/repo')
+  assert.equal(results.items[0].private, true)
+  assert.equal(results.hasNext, false)
   assert.match(seen[1].url, /page=2/)
   assert.equal(seen[1].auth, 'Bearer fake-token')
   assert.deepEqual(await client.authStatus(), { method: 'environment' })
@@ -133,13 +134,13 @@ test('repository and organization discovery use scoped, validated GitHub search 
     '/search/users': { items: [{ login: 'OtherOrg', avatar_url: null }] }
   })
   const results = await client.searchRepositories('repo', 2)
-  assert.equal(results[0].fullName, 'OtherOrg/repo')
-  assert.equal(results[0].private, true)
+  assert.equal(results.items[0].fullName, 'OtherOrg/repo')
+  assert.equal(results.items[0].private, true)
   assert.equal(seen[0].auth, 'Bearer fake-token')
   const query = new URL(seen[0].url).searchParams
   assert.equal(query.get('q'), 'repo in:name')
   assert.equal(query.get('page'), '2')
-  assert.equal((await client.searchOrganizations('Other', 1))[0].login, 'OtherOrg')
+  assert.equal((await client.searchOrganizations('Other', 1)).items[0].login, 'OtherOrg')
   assert.equal(new URL(seen[1].url).searchParams.get('q'), 'Other in:login type:org')
   assert.equal(seen[1].auth, 'Bearer fake-token')
 })
@@ -154,4 +155,66 @@ test('GitHub search input cannot inject API qualifiers or unrestricted URLs', as
   }
   await assert.rejects(() => client.searchRepositories('repo', 0))
   assert.equal(seen.length, 0)
+})
+
+test('authenticated organization discovery returns accessible organizations and real next links', async () => {
+  const seen: string[] = []
+  const client = new GitHubClient(
+    (async (input) => {
+      seen.push(String(input))
+      return Response.json([{ login: 'PrivateOrg', avatar_url: null }], {
+        headers: {
+          Link: '<https://api.github.com/user/orgs?per_page=100&page=2>; rel="next"'
+        }
+      })
+    }) as typeof fetch,
+    { get: async () => ({ method: 'environment' as const, token: 'secret' }) }
+  )
+  const result = await client.listAccessibleOrganizations(1)
+  assert.deepEqual(result, {
+    items: [{ login: 'PrivateOrg', avatarUrl: null }], hasNext: true
+  })
+  assert.match(seen[0], /\/user\/orgs\?per_page=100&page=1/)
+  const { client: anonymous } = mockGithub({}, false)
+  await assert.rejects(() => anonymous.listAccessibleOrganizations(1), /Sign in/)
+})
+
+test('organization repository search covers all pages with server-side org restriction', async () => {
+  const { client, seen } = mockGithub({
+    '/search/repositories': { total_count: 45, items: [repo] }
+  })
+  const first = await client.searchOrganizationRepositories('OtherOrg', 'repo', 1)
+  assert.deepEqual(first, { items: [{
+    id: 7, fullName: 'OtherOrg/repo', name: 'repo', description: 'Demo',
+    private: true, archived: false, defaultBranch: 'main',
+    updatedAt: '2026-11-04T07:00:00Z', htmlUrl: 'https://github.com/OtherOrg/repo'
+  }], hasNext: true, totalCount: 45 })
+  const second = await client.searchOrganizationRepositories('OtherOrg', 'repo', 3)
+  assert.equal(second.hasNext, false)
+  assert.equal(new URL(seen[0].url).searchParams.get('q'), 'repo in:name org:OtherOrg')
+  assert.equal(new URL(seen[1].url).searchParams.get('page'), '3')
+})
+
+test('errors distinguish invalid access, forbidden access, rate limits, network and missing resources', async () => {
+  for (const [status, headers, fragment] of [
+    [401, {}, /authentication expired/],
+    [403, {}, /denied this account access/],
+    [403, { 'x-ratelimit-remaining': '0' }, /rate limit reached/],
+    [429, { 'retry-after': '20' }, /Retry after 20 seconds/],
+    [404, {}, /not found or inaccessible/],
+    [503, {}, /temporarily unavailable/]
+  ] as const) {
+    const client = new GitHubClient(
+      (async () => new Response('{}', { status, headers })) as typeof fetch,
+      { get: async () => ({ method: 'environment' as const, token: 'secret' }) }
+    )
+    await assert.rejects(() => client.organization('ExampleOrg'), fragment)
+  }
+  const disconnected = new GitHubClient(
+    (async () => { throw new Error('Bearer internal-secret https://api.github.com/private') }) as typeof fetch,
+    { get: async () => ({ method: 'anonymous' as const }) }
+  )
+  await assert.rejects(() => disconnected.organization('ExampleOrg'), (error: unknown) =>
+    error instanceof Error && /connection failed/.test(error.message) &&
+      !error.message.includes('internal-secret'))
 })

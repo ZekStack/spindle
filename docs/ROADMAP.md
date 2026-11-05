@@ -168,9 +168,17 @@ M0 release gates or certify the updater for public production deployment.
       screens. Removing an organization preserves independent tracked
       shortcuts. All operations are local preferences; GitHub resources are
       never changed. Pagination/discovery refinements continue in M1.4.
-- [ ] **M1.4 — Discovery quality.** Pagination, search, private/archived
-      indicators, accessible-org discovery and helpful 401/403/404/rate-limit
-      states. Support multiple unrelated organizations at once.
+- [x] **M1.4 — Discovery quality.** The add-organization dialog now lists
+      organizations available to the selected GitHub account (with a separate
+      public search option). Organization repository search runs across all
+      accessible repositories server-side rather than filtering only one
+      loaded page. GitHub Link pagination and Search result totals control
+      Next/Previous navigation; private/archived markers remain visible.
+      Distinct 401, 403, 404, rate-limit, offline and service-error states
+      provide actionable English/Hungarian messaging without exposing tokens.
+      Multiple unrelated saved organizations continue to coexist.
+      **Acceptance still requires** real-account discovery and private-org
+      browsing on installed desktop builds.
 
 **Exit gate:** a fresh user can authenticate, add any accessible
 organization or repository, restart Spindle, and retain the workspace.

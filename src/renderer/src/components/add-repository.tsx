@@ -7,7 +7,7 @@ import { parseRepositoryFullName } from '../../../shared/contracts'
 import { Button } from './ui/button'
 import { Chip, ErrorState } from './common'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
-import { errorMessage } from '../lib/utils'
+import { localizedGitHubError } from '../lib/utils'
 
 export function AddRepository({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation()
@@ -91,7 +91,7 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
       </form>
       <p className="mt-2 text-xs text-[var(--muted)]">{t('repositorySearchHint')}</p>
       {invalidPath && <p role="alert" className="mt-3 text-sm text-red-400">{t('repositoryInvalidPath')}</p>}
-      {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-400">{errorMessage(mutation.error)}</p>}
+      {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-400">{localizedGitHubError(mutation.error, t)}</p>}
       {mutation.isSuccess && <p role="status" className="mt-3 text-sm text-emerald-400">
         {t('repositoryAdded')}
       </p>}
@@ -99,9 +99,9 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
         <h3 className="mb-3 text-sm font-semibold">{t('repositorySearchResults')}</h3>
         {search.isPending && <p className="py-5 text-sm text-[var(--muted)]">{t('loading')}</p>}
         {search.isError && <ErrorState error={search.error} retry={() => { void search.refetch() }}/>}
-        {search.data?.length === 0 && <p className="py-6 text-sm text-[var(--muted)]">{t('noRepos')}</p>}
+        {search.data?.items.length === 0 && <p className="py-6 text-sm text-[var(--muted)]">{t('noRepos')}</p>}
         <div className="divide-y divide-[var(--border)] rounded-xl border border-[var(--border)]">
-          {search.data?.map((repository) => {
+          {search.data?.items.map((repository) => {
             const added = tracked.has(repository.fullName.toLowerCase())
             return <div key={repository.id} className="flex items-center gap-3 px-3 py-3">
               <GitBranch className="size-4 shrink-0 text-orange-500"/>
@@ -124,8 +124,11 @@ export function AddRepository({ compact = false }: { compact?: boolean }) {
           <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
             {t('previous')}
           </Button>
-          <span className="text-xs text-[var(--muted)]">{page}</span>
-          <Button size="sm" variant="ghost" disabled={search.data.length < 20}
+          <span className="text-xs text-[var(--muted)]">{t('pageNumber', { page })}
+            {search.data.totalCount !== undefined &&
+              <span> · {t('searchTotalResults', { count: search.data.totalCount })}</span>}
+          </span>
+          <Button size="sm" variant="ghost" disabled={!search.data.hasNext}
             onClick={() => setPage(p => p + 1)}>{t('showMore')}</Button>
         </div>}
       </div>}

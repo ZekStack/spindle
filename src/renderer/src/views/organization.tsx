@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, ChevronLeft, ChevronRight, GitBranch, LockKeyhole, Search, Star } from 'lucide-react'
@@ -7,7 +7,7 @@ import { organizationRoute } from '../router'
 import { Button } from '../components/ui/button'
 import { Busy, Chip, ErrorState, ExternalGitHub } from '../components/common'
 import { RemoveOrganization } from '../components/remove-organization'
-import { readableDate } from '../lib/utils'
+import { readableDate, localizedGitHubError } from '../lib/utils'
 import type { Repository } from '../../../shared/contracts'
 
 function RepositoryRow({ repo, tracked }: { repo: Repository; tracked: boolean }) {
@@ -33,7 +33,7 @@ function RepositoryRow({ repo, tracked }: { repo: Repository; tracked: boolean }
         {repo.private && <LockKeyhole className="size-3.5 shrink-0 text-[var(--muted)]"/>}
       </Link>
       <p className="mt-1 truncate text-xs text-[var(--muted)]">{repo.description || repo.fullName}</p>
-      {mutation.isError && <p role="alert" className="mt-1 text-xs text-red-400">{mutation.error.message}</p>}
+      {mutation.isError && <p role="alert" className="mt-1 text-xs text-red-400">{localizedGitHubError(mutation.error, t)}</p>}
     </div>
     {repo.archived && <Chip>{t('archived')}</Chip>}
     <span className="hidden w-28 text-right text-xs text-[var(--muted)] md:block">{readableDate(repo.updatedAt, i18n.language)}</span>
@@ -45,12 +45,22 @@ export function OrganizationPage() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState('')
+  const [search, setSearch] = useState('')
   const workspace = useQuery({ queryKey: ['workspace'], queryFn: () => window.spindle.getWorkspace() })
   const organization = useQuery({ queryKey: ['org', login], queryFn: () => window.spindle.getOrganization(login) })
-  const repos = useQuery({ queryKey: ['repos', login, page], queryFn: () => window.spindle.listRepositories(login, page) })
+  const repos = useQuery({
+    queryKey: ['repos', login, search, page],
+    queryFn: () => search
+      ? window.spindle.searchOrganizationRepositories(login, search, page)
+      : window.spindle.listRepositories(login, page)
+  })
   const tracked = workspace.data?.trackedRepositories ?? []
-  const filtered = useMemo(() => (repos.data || []).filter((repo) =>
-    (repo.name + ' ' + (repo.description || '')).toLowerCase().includes(filter.toLowerCase())), [repos.data, filter])
+  const results = repos.data?.items ?? []
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setPage(1)
+    setSearch(filter.trim())
+  }
   return <div className="space-y-6">
     <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
       <div className="flex items-center gap-4">
@@ -72,20 +82,32 @@ export function OrganizationPage() {
         <div><h2 className="text-lg font-semibold">{t('allRepositories')}</h2>
           <p className="mt-1 text-xs text-[var(--muted)]">{t('track')} · {tracked.filter((name) => name.split('/')[0].toLowerCase() === login.toLowerCase()).length} {t('tracked')}</p>
         </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"/>
-          <input className="field w-full pl-9 text-sm sm:w-64" placeholder={t('searchRepositories')} value={filter} onChange={(event) => setFilter(event.target.value)}/>
-        </div>
+        <form onSubmit={submitSearch} className="flex flex-wrap items-center gap-2">
+          <label className="relative block min-w-0 flex-1 sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--muted)]"/>
+            <input className="field w-full pl-9 text-sm" value={filter}
+              aria-label={t('searchOrganizationRepositories')}
+              placeholder={t('searchOrganizationRepositories')}
+              onChange={(event) => setFilter(event.target.value)}/>
+          </label>
+          <Button variant="secondary" size="sm" type="submit"
+            disabled={Boolean(filter.trim()) && filter.trim().length < 2}>{t('findRepository')}</Button>
+          {search && <Button variant="ghost" size="sm" type="button"
+            onClick={() => { setFilter(''); setSearch(''); setPage(1) }}>{t('clearSearch')}</Button>}
+        </form>
       </div>
       {repos.isPending ? <div className="px-6"><Busy/></div> : repos.isError ? <div className="p-5"><ErrorState error={repos.error} retry={() => { void repos.refetch() }}/></div> :
-        filtered.length ? filtered.map((repo) => <RepositoryRow key={repo.id} repo={repo} tracked={tracked.some((name) => name.toLowerCase() === repo.fullName.toLowerCase())}/>) :
+        results.length ? results.map((repo) => <RepositoryRow key={repo.id} repo={repo} tracked={tracked.some((name) => name.toLowerCase() === repo.fullName.toLowerCase())}/>) :
           <p className="p-12 text-center text-sm text-[var(--muted)]">{t('noRepos')}</p>}
       <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3">
         <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
           <ChevronLeft className="size-4"/>{t('previous')}
         </Button>
-        <span className="text-xs text-[var(--muted)]">{page}</span>
-        <Button variant="ghost" size="sm" disabled={!repos.data || repos.data.length < 100} onClick={() => setPage((value) => value + 1)}>
+        <span className="text-xs text-[var(--muted)]">
+          {t('pageNumber', { page })}{search && repos.data?.totalCount !== undefined
+            ? ` · ${t('searchTotalResults', { count: repos.data.totalCount })}` : ''}
+        </span>
+        <Button variant="ghost" size="sm" disabled={!repos.data?.hasNext} onClick={() => setPage((value) => value + 1)}>
           {t('showMore')}<ChevronRight className="size-4"/>
         </Button>
       </div>

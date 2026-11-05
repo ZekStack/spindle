@@ -1,7 +1,7 @@
 import { AlertTriangle, ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
-import { errorMessage } from '../lib/utils'
+import { localizedGitHubError } from '../lib/utils'
 
 export function Busy() {
   const { t } = useTranslation()
@@ -11,7 +11,7 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
   const { t } = useTranslation()
   return <div role="alert" className="rounded-xl border border-red-500/25 bg-red-500/5 p-5">
     <div className="flex items-center gap-2 text-sm font-semibold text-red-400"><AlertTriangle className="size-4"/>{t('loadError')}</div>
-    <p className="mt-2 break-words text-sm text-[var(--muted)]">{errorMessage(error)}</p>
+    <p className="mt-2 break-words text-sm text-[var(--muted)]">{localizedGitHubError(error, t)}</p>
     {retry && <Button variant="secondary" size="sm" className="mt-4" onClick={retry}><RefreshCw className="size-3.5"/>{t('retry')}</Button>}
   </div>
 }

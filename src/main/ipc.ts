@@ -56,7 +56,10 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   })
   handle('spindle:github:organization', (login: string) => github.organization(login))
   handle('spindle:github:search-orgs', (query: string, page: number) => github.searchOrganizations(query, page))
+  handle('spindle:github:my-orgs', (page: number) => github.listAccessibleOrganizations(page))
   handle('spindle:github:repositories', (login: string, page: number) => github.repositories(login, page))
+  handle('spindle:github:org-repo-search', (login: string, query: string, page: number) =>
+    github.searchOrganizationRepositories(login, query, page))
   handle('spindle:github:search-repos', (query: string, page: number) => github.searchRepositories(query, page))
   handle('spindle:github:repository', (owner: string, name: string) => github.repository(owner, name))
   handle('spindle:github:releases', (owner: string, name: string) => github.releases(owner, name))
