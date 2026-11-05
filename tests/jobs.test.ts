@@ -100,3 +100,41 @@ test('new manager marks unfinished jobs interrupted and rejects unsafe IDs', asy
     first.cancel(active.id)
   } finally { rmSync(dir, { force: true, recursive: true }) }
 })
+
+test('partial GitHub inspections preserve completed work and explicit transient retry guidance', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spindle-activity-'))
+  const file = join(dir, 'history.json')
+  try {
+    const client = {
+      ...inspector,
+      releases: async () => { throw new Error('GitHub connection failed: SECRET_TOKEN') }
+    }
+    const manager = new JobManager(file, client)
+    manager.inspect('ExampleOrg', 'project')
+    await settle(() => manager.list()[0]?.phase === 'partial')
+    const job = manager.list()[0]
+    assert.equal(job.progress, 33)
+    assert.equal(job.errorCode, 'network')
+    assert.equal(job.retryable, true)
+    assert.equal(job.output.some((line) => line.includes('Repository metadata loaded.')), true)
+    assert.equal(JSON.stringify(job).includes('SECRET_TOKEN'), false)
+    assert.equal(new JobManager(file, client).list()[0].phase, 'partial')
+  } finally { rmSync(dir, { force: true, recursive: true }) }
+})
+
+test('permission failures remain non-retryable and do not falsely report partial work', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spindle-activity-'))
+  try {
+    const client = {
+      ...inspector,
+      repository: async () => { throw new Error('GitHub denied this account access') }
+    }
+    const manager = new JobManager(join(dir, 'history.json'), client)
+    manager.inspect('ExampleOrg', 'project')
+    await settle(() => manager.list()[0]?.phase === 'failed')
+    const job = manager.list()[0]
+    assert.equal(job.errorCode, 'forbidden')
+    assert.equal(job.retryable, false)
+    assert.equal(job.progress, 5)
+  } finally { rmSync(dir, { force: true, recursive: true }) }
+})
