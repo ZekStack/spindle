@@ -1,4 +1,4 @@
-import { clipboard, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { clipboard, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { GitHubClient } from './github'
@@ -40,6 +40,16 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:jobs:list', () => jobs.list())
   handle('spindle:jobs:inspect', (owner: string, name: string) => jobs.inspect(owner, name))
   handle('spindle:jobs:cancel', (id: string) => jobs.cancel(id))
+  handle('spindle:jobs:local-pick', async () => {
+    // Renderer cannot submit arbitrary filesystem paths or Git arguments.
+    const selected = await dialog.showOpenDialog(window, {
+      title: 'Select a local Git checkout',
+      properties: ['openDirectory']
+    })
+    if (selected.canceled || selected.filePaths.length !== 1) return null
+    return jobs.inspectLocal(selected.filePaths[0])
+  })
+  handle('spindle:jobs:local-retry', (id: string) => jobs.retryLocal(id))
   const removeJobsListener = jobs.subscribe((items) => {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.send('spindle:jobs:changed', items)
