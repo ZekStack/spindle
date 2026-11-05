@@ -5,7 +5,7 @@ import { Building2, Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
-import { errorMessage } from '../lib/utils'
+import { localizedGitHubError } from '../lib/utils'
 
 export function AddOrganization({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false)
@@ -61,7 +61,7 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
             className="h-11 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 outline-none focus:border-orange-500" />
         </label>
         {mutation.isError && <div role="alert" className="rounded-lg bg-red-500/10 p-3 text-xs text-red-400">
-          <strong>{t('addOrganizationError')}:</strong> {errorMessage(mutation.error)}
+          <strong>{t('addOrganizationError')}:</strong> {localizedGitHubError(mutation.error, t)}
         </div>}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" disabled={value.trim().length < 2}
@@ -79,7 +79,7 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
           <h3 className="mb-2 text-sm font-semibold">{t('organizationSearchResults')}</h3>
           {suggestions.isPending && <p className="text-sm text-[var(--muted)]">{t('loading')}</p>}
           {suggestions.isError && <p role="alert" className="text-sm text-red-400">
-            {t('organizationSearchError')}
+            {localizedGitHubError(suggestions.error, t)}
           </p>}
           {suggestions.data?.items.length === 0 && <p className="text-sm text-[var(--muted)]">{t('noOrganizationsFound')}</p>}
           <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
@@ -104,7 +104,7 @@ export function AddOrganization({ compact = false }: { compact?: boolean }) {
         <h3 className="mb-2 text-sm font-semibold">{t('yourAccessibleOrganizations')}</h3>
         {available.isPending && <p className="text-sm text-[var(--muted)]">{t('loading')}</p>}
         {available.isError && <p role="alert" className="text-sm text-red-400">
-          {errorMessage(available.error)}
+          {localizedGitHubError(available.error, t)}
         </p>}
         {available.data?.items.length === 0 && <p className="text-sm text-[var(--muted)]">
           {t('noAccessibleOrganizations')}
