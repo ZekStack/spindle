@@ -1,4 +1,5 @@
 import type { PullReadiness } from './git-safety'
+import type { GitTagsSnapshot, TagMutationRequest } from './tags'
 // The renderer knows only these data shapes and the methods exposed by preload.
 // No filesystem, Node, shell, credentials, or general-purpose IPC access.
 import type { UpdateStatus } from './update-policy'
@@ -117,6 +118,8 @@ export interface SpindleApi {
   cloneRepository(owner: string, name: string, savedRoot: string): Promise<JobRecord>
   syncLinkedRepository(owner: string, name: string, operation: 'fetch' | 'pull'): Promise<JobRecord>
   previewLinkedPull(owner: string, name: string): Promise<PullReadiness>
+  listLinkedTags(owner: string, name: string): Promise<GitTagsSnapshot>
+  mutateLinkedTag(owner: string, name: string, request: TagMutationRequest): Promise<JobRecord>
   addOrganization(login: string): Promise<Workspace>
   removeOrganization(login: string): Promise<Workspace>
   trackRepository(owner: string, name: string, tracked: boolean): Promise<Workspace>
