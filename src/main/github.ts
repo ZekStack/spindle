@@ -1,5 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
+import { decodeWorkflowContent, parseWorkflowDefinition } from './workflow-definition'
+import {
+  validateWorkflowPage, validateRunsFilter, type WorkflowCatalogPage,
+  type WorkflowSource, type WorkflowRunsFilter, type WorkflowRunsPage
+} from '../shared/workflow-discovery'
 import { TAG_OID_PATTERN, validateTagName } from '../shared/tags'
 import {
   validateWorkflowId, validateDispatchRequest, type WorkflowChoice,
@@ -424,6 +429,127 @@ export class GitHubClient {
           'POST', buffer, signal)
         break
       }
+    }
+  }
+
+  /** Server-paginated workflow list; filtering on the current page is renderer-local. */
+  async workflowCatalog(ownerValue: string, nameValue: string, pageValue: number,
+    signal?: AbortSignal): Promise<WorkflowCatalogPage> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const page = validateWorkflowPage(pageValue)
+    const result = await this.requestWithMeta<{
+      total_count: number
+      workflows: Array<{ id: number; name: string; path: string; state: string }>
+    }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/workflows?per_page=50&page=${page}`, signal)
+    const items: WorkflowChoice[] = result.data.workflows
+      .filter(entry => Number.isSafeInteger(entry.id) && entry.id > 0 &&
+        typeof entry.path === 'string' &&
+        /^\\.github\\/workflows\\/[a-zA-Z0-9_.-]+\\.ya?ml$/.test(entry.path))
+      .map(entry => ({
+        id: entry.id, name: typeof entry.name === 'string' ?
+          entry.name.slice(0, 120) : entry.path,
+        path: entry.path,
+        state: typeof entry.state === 'string' ? entry.state.slice(0, 80) : 'unknown'
+      }))
+    const totalCount = Number.isSafeInteger(result.data.total_count) &&
+      result.data.total_count >= 0 ? result.data.total_count : undefined
+    return {
+      items, page, pageSize: 50,
+      hasNext: result.hasNext || (totalCount !== undefined && page * 50 < totalCount),
+      ...(totalCount !== undefined ? { totalCount } : {})
+    }
+  }
+
+  /** Inspect source in the repository's current default branch; do not guess workflow triggers. */
+  async workflowSource(ownerValue: string, nameValue: string,
+    rawId: number, signal?: AbortSignal): Promise<WorkflowSource> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const id = validateWorkflowId(rawId)
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    const remote = await this.request<{
+      id: number; name: string; path: string; state: string
+    }>(`${prefix}/actions/workflows/${id}`, signal)
+    if (remote.id !== id || typeof remote.path !== 'string' ||
+      !/^\\.github\\/workflows\\/[a-zA-Z0-9_.-]+\\.ya?ml$/.test(remote.path)) {
+      throw new Error('GitHub returned an invalid workflow definition')
+    }
+    const repo = await this.repository(owner, name, signal)
+    const result: WorkflowSource = {
+      workflow: { id, name: typeof remote.name === 'string' ?
+        remote.name.slice(0, 120) : remote.path, path: remote.path,
+        state: typeof remote.state === 'string' ? remote.state.slice(0, 80) : 'unknown' },
+      branch: repo.defaultBranch, fileBlobSha: null,
+      sourceState: 'unavailable', triggers: [], dispatchInputs: [],
+      permissions: { mode: 'unspecified', entries: [] }, jobPermissions: []
+    }
+    try {
+      const blob = await this.request<{
+        type: string; path: string; sha: string;
+        size: number; encoding: string; content: string
+      }>(`${prefix}/contents/${remote.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(repo.defaultBranch)}`, signal)
+      if (blob.type !== 'file' || blob.path !== remote.path ||
+        !TAG_OID_PATTERN.test(blob.sha)) throw new Error('Invalid workflow source')
+      result.fileBlobSha = blob.sha
+      if (blob.size > 128 * 1024) {
+        result.sourceState = 'too-large'
+        return result
+      }
+      const source = decodeWorkflowContent(blob)
+      const parsed = parseWorkflowDefinition(source)
+      return { ...result, ...parsed, sourceState: 'parsed' }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found or inaccessible')) {
+        return result
+      }
+      if (error instanceof Error && /Workflow source|workflow source|Invalid workflow|Invalid UTF/i.test(error.message)) {
+        result.sourceState = 'invalid'
+        return result
+      }
+      // Network, invalid credentials and rate-limit are real read failures.
+      throw error
+    }
+  }
+
+  /** Filtered GitHub Actions runs for a single workflow with real API pagination. */
+  async workflowRunPage(ownerValue: string, nameValue: string, rawId: number,
+    input: WorkflowRunsFilter, signal?: AbortSignal): Promise<WorkflowRunsPage> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const workflowId = validateWorkflowId(rawId)
+    const query = validateRunsFilter(input)
+    const args = new URLSearchParams({ per_page: '30', page: String(query.page) })
+    if (query.branch) args.set('branch', query.branch)
+    if (query.event) args.set('event', query.event)
+    if (query.status) args.set('status', query.status)
+    const response = await this.requestWithMeta<{
+      total_count: number
+      workflow_runs: Array<{
+        id: number; workflow_id: number; name: string | null;
+        run_number: number; run_attempt: number;
+        event: string; status: string; conclusion: string | null;
+        head_branch: string | null; head_sha: string;
+        created_at: string; updated_at: string; html_url: string
+      }>
+    }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/workflows/${workflowId}/runs?${args}`, signal)
+    const items = response.data.workflow_runs
+      .filter(run => Number.isSafeInteger(run.id) && run.id > 0 &&
+        run.workflow_id === workflowId && TAG_OID_PATTERN.test(run.head_sha))
+      .map(run => ({
+        id: run.id, workflowId, name: (run.name ?? '').slice(0, 120),
+        number: run.run_number, attempt: run.run_attempt,
+        event: run.event, status: run.status,
+        conclusion: run.conclusion, headBranch: run.head_branch,
+        headSha: run.head_sha, createdAt: run.created_at,
+        updatedAt: run.updated_at, htmlUrl: run.html_url
+      }))
+    const totalCount = Number.isSafeInteger(response.data.total_count) &&
+      response.data.total_count >= 0 ? response.data.total_count : undefined
+    return {
+      items, page: query.page, workflowId,
+      hasNext: response.hasNext || (totalCount !== undefined && query.page * 30 < totalCount),
+      ...(totalCount !== undefined ? { totalCount } : {})
     }
   }
 
