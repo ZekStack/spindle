@@ -345,7 +345,8 @@ export class JobManager {
     }
     if (this.history.some(item => activeJob(item.phase) &&
       (isLocal(item.kind) || item.kind === 'github-release' ||
-        item.kind === 'github-workflow-dispatch') &&
+        item.kind === 'github-workflow-dispatch' ||
+        item.kind === 'github-workflow-control') &&
       item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A local Git operation is already running for this repository')
     }
@@ -410,7 +411,7 @@ export class JobManager {
     if (request.action !== 'upload-asset' && pickedAssetPath) throw new Error('Unexpected file')
     if (this.history.some(item => activeJob(item.phase) &&
       (item.kind === 'github-release' || item.kind === 'github-workflow-dispatch' ||
-        item.kind === 'local-git-tag') &&
+        item.kind === 'github-workflow-control' || item.kind === 'local-git-tag') &&
       item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A release action is already running for this repository')
     }
@@ -444,7 +445,7 @@ export class JobManager {
         configured.ref !== input.ref) throw new Error('Release strategy changed; refresh configuration')
     if (this.history.some(item => activeJob(item.phase) &&
         (item.kind === 'github-workflow-dispatch' || item.kind === 'github-release' ||
-          item.kind === 'local-git-tag') &&
+          item.kind === 'github-workflow-control' || item.kind === 'local-git-tag') &&
         item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A remote release operation is already running for this repository')
     }
