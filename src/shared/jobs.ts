@@ -2,14 +2,15 @@ import type { LocalGitInspection } from './git-inspection'
 import type { GitSafetyCode } from './git-safety'
 import type { TagMutationRequest } from './tags'
 import type { SafeReleaseMutation } from './releases'
+import type { StoredDispatchRequest } from './release-strategies'
 
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection' |
-  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag' | 'github-release'
+  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag' | 'github-release' | 'github-workflow-dispatch'
 export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
 export type JobErrorCode = GitSafetyCode | 'forbidden' | 'not-found' | 'rate-limit' |
   'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' |
-  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'release-stale' | 'release-uncertain' | 'unknown'
+  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'release-stale' | 'release-uncertain' | 'dispatch-uncertain' | 'unknown'
 
 export interface JobRecord {
   id: string
@@ -27,7 +28,9 @@ export interface JobRecord {
   tagRemoteDeleted?: boolean
   /** Safe operation metadata; release notes and native asset paths are transient. */
   releaseOperation?: SafeReleaseMutation
-  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag' | 'release'
+  /** Workflows, refs and tag SHA are safe; dispatch inputs must remain transient. */
+  dispatchOperation?: StoredDispatchRequest
+  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag' | 'release' | 'dispatch'
   requestedAt: string
   startedAt: string | null
   finishedAt: string | null

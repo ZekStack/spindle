@@ -6,13 +6,18 @@ import { githubDeviceAuth } from './device-auth'
 import { managedGitHubToken } from './managed-token'
 import { WorkspaceStore } from './store'
 import { LocalWorkspaceStore } from './local-workspaces'
+import { ReleaseStrategyStore } from './release-strategies'
 import { JobManager } from './jobs'
 import type { TagMutationRequest } from '../shared/tags'
 import type { ReleaseMutationRequest } from '../shared/releases'
+import {
+  validateReleaseStrategy, validateWorkflowId, type ReleaseStrategy,
+  type WorkflowDispatchRequest
+} from '../shared/release-strategies'
 import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
 
-export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github: GitHubClient, updates: UpdateManager, jobs: JobManager, local: LocalWorkspaceStore): void {
+export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github: GitHubClient, updates: UpdateManager, jobs: JobManager, local: LocalWorkspaceStore, releaseStrategies: ReleaseStrategyStore): void {
   function allow(event: IpcMainInvokeEvent): void {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
       throw new Error('Untrusted IPC sender')
@@ -132,6 +137,26 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     return selected.canceled || selected.filePaths.length !== 1
       ? null : jobs.mutateRelease(owner, name, request, selected.filePaths[0])
   })
+  handle('spindle:strategy:get', (owner: string, name: string) =>
+    releaseStrategies.get(`${validateLogin(owner)}/${validateRepository(name)}`))
+  handle('spindle:strategy:save', async (owner: string, name: string, input: ReleaseStrategy) => {
+    const repository = `${validateLogin(owner)}/${validateRepository(name)}`
+    const strategy = validateReleaseStrategy(input)
+    if (strategy.kind !== 'api') {
+      await github.releaseWorkflow(owner, name, strategy.workflowId)
+    }
+    return releaseStrategies.save(repository, strategy)
+  })
+  handle('spindle:strategy:workflows', (owner: string, name: string) =>
+    github.workflows(owner, name))
+  handle('spindle:strategy:push-tag', async (owner: string, name: string, tag: string, oid: string) => {
+    const strategy = releaseStrategies.get(`${validateLogin(owner)}/${validateRepository(name)}`)
+    if (strategy.kind !== 'tag-push') throw new Error('Release strategy changed; refresh first')
+    await github.releaseWorkflow(owner, name, validateWorkflowId(strategy.workflowId))
+    return jobs.mutateTag(owner, name, { action: 'push', tag, expectedLocalOid: oid })
+  })
+  handle('spindle:strategy:dispatch', (owner: string, name: string, request: WorkflowDispatchRequest) =>
+    jobs.dispatchRelease(owner, name, request))
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
   handle('spindle:auth:status', () => github.authStatus())
   handle('spindle:auth:identity', (refresh: boolean = false) => github.identity(refresh === true))

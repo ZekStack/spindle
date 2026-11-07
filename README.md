@@ -131,6 +131,32 @@ Git output. Clone/fetch/fast-forward-only pull and Git tag lifecycle actions
 are available with Activity progress. Native OS acceptance for the complete
 workflow is still outstanding.
 
+## Release strategies (M4.3)
+
+Every repository's Releases tab provides a release strategy selector.
+The **GitHub API** strategy uses the existing create-draft workflow (default).
+The **Git tag push** strategy requires an existing unpublished local tag in
+a linked checkout; Spindle pushes it without force using the existing Git
+safety checks. The selected GitHub Actions workflow must actually listen to
+tag pushes, otherwise no run will start. Spindle does not automatically create
+a GitHub Release for this strategy.
+
+The **workflow_dispatch** strategy selects an active workflow discovered
+from the repository, with an explicit branch or tag ref. Users verify the
+existing remote release tag and exact object/commit before confirming.
+Optional workflow inputs are provided as a JSON object of up to 10 string
+values. Values are transient and never persisted to Activity or strategy
+preferences. Spindle does not guess input names or triggers from workflow
+filenames. GitHub's 204 response confirms only that a dispatch request was
+accepted; it does not confirm a run or published Release.
+
+Strategies are saved atomically in private Electron user data
+(`release-strategies.json`) and remain separate across repositories and
+independent of configured GitHub accounts. An active workflow may require
+permissions on the selected account. After a cancelled/timed-out dispatch,
+inspect GitHub Actions and Releases before trying again; no automatic
+retry occurs. End-to-end platform and live GitHub acceptance is pending.
+
 ## GitHub Release management (M4.2)
 
 From a repository's **Releases** tab, enter an existing remote Git tag and

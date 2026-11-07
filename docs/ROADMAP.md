@@ -366,6 +366,28 @@ Release, and CI-generated release workflow.
 - [ ] **M4.3 — Release strategies.** Per-repository configuration for
       **tag-push workflow**, **workflow_dispatch**, or **GitHub API** release
       creation; discover defaults rather than hardcoding workflow names.
+      Engineering work: [x] store validated, versioned strategy preferences
+      per repository independently of account, tracked repositories and local
+      checkout paths; [x] use existing manual GitHub API draft creation as
+      the default; [x] dynamically discover active GitHub Actions workflows,
+      never hardcode names or assume any workflow publishes a Release;
+      [x] explicitly configure workflow IDs and dispatch refs;
+      [x] guarded tag-push strategy reuses the no-force tag lifecycle,
+      requiring a linked local checkout, verified origin and unused tag;
+      [x] guarded workflow_dispatch validates an existing remote tag object,
+      the saved workflow/ref, and bounded per-run JSON string inputs;
+      [x] revalidate selected workflow and tag on main before dispatch;
+      [x] separate confirmations and EN/HU feedback; [x] reuse main-process
+      Activity with cancellation, safe uncertain-outcome reporting and
+      no persisted workflow-input values; [x] isolated persistence and
+      API/job tests. GitHub accepting a dispatch does not prove the workflow
+      ran or that a Release was published.
+      **Remaining acceptance:** installed Windows/Linux configuration/restart
+      testing, public/private workflow discovery permissions, real tag-push
+      trigger and workflow_dispatch with required inputs on disposable
+      GitHub repositories. M4.4 and M5 add live run correlation and
+      full trigger/input schema discovery. Do not mark this milestone
+      accepted until these checks pass.
 - [ ] **M4.4 — Safe progress.** Correlate tag/commit, Actions run, publication
       and assets. Handle eventual consistency with bounded polling and
       explicit unknown/failed/timed-out states; recover from partial success

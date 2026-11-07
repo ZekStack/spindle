@@ -16,11 +16,15 @@ import { validateTagMutation, type GitTagsSnapshot, type TagMutationRequest } fr
 import {
   validateReleaseMutation, type ReleaseMutationRequest
 } from '../shared/releases'
+import {
+  validateDispatchRequest, type WorkflowDispatchRequest
+} from '../shared/release-strategies'
+import type { ReleaseStrategyStore } from './release-strategies'
 
 type Inspector = Pick<GitHubClient, 'repository' | 'releases' | 'workflowRuns'> &
-  Partial<Pick<GitHubClient, 'mutateRelease'>>
+  Partial<Pick<GitHubClient, 'mutateRelease' | 'dispatchReleaseWorkflow'>>
 type Listener = (jobs: JobRecord[]) => void
-const isLocal = (kind: JobRecord['kind']): boolean => kind !== 'repository-inspection' && kind !== 'github-release'
+const isLocal = (kind: JobRecord['kind']): boolean => kind !== 'repository-inspection' && kind !== 'github-release' && kind !== 'github-workflow-dispatch'
 const MAX_HISTORY = 100
 const MAX_RUNNING = 2
 const DEADLINE_MS = 45_000
@@ -29,6 +33,7 @@ function copy(job: JobRecord): JobRecord {
   return { ...job, output: [...job.output],
     ...(job.tagOperation ? { tagOperation: { ...job.tagOperation } } : {}),
     ...(job.releaseOperation ? { releaseOperation: { ...job.releaseOperation } } : {}),
+    ...(job.dispatchOperation ? { dispatchOperation: { ...job.dispatchOperation } } : {}),
     ...(job.inspection ? { inspection: { ...job.inspection,
       localTags: { ...job.inspection.localTags, names: [...job.inspection.localTags.names] },
       remoteTags: { ...job.inspection.remoteTags, names: [...job.inspection.remoteTags.names] }
@@ -65,16 +70,22 @@ function validStoredReleaseOperation(value: unknown): boolean {
     return true
   } catch { return false }
 }
+function validStoredDispatch(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.hasOwn(value, 'inputs')) return false
+  try { validateDispatchRequest({ ...value, inputs: {} }); return true }
+  catch { return false }
+}
 function validHistory(raw: unknown): raw is JobRecord[] {
   return Array.isArray(raw) && raw.length <= MAX_HISTORY && raw.every((job) =>
     job && typeof job === 'object' && typeof job.id === 'string' &&
     typeof job.repository === 'string' && job.repository.length <= 220 &&
-    (job.kind === 'repository-inspection' || job.kind === 'github-release' ||
+    (job.kind === 'repository-inspection' || job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ||
       (['local-git-inspection', 'local-git-clone', 'local-git-fetch', 'local-git-pull', 'local-git-tag'].includes(job.kind) &&
         typeof job.location === 'string' &&
         job.location.length > 0 && job.location.length <= 2048 &&
         isAbsolute(job.location) && !job.location.includes('\0'))) &&
-    job.action === (job.kind === 'github-release' ? 'release' : job.kind === 'local-git-tag' ? 'tag' : job.kind === 'local-git-clone' ? 'clone'
+    job.action === (job.kind === 'github-workflow-dispatch' ? 'dispatch' : job.kind === 'github-release' ? 'release' : job.kind === 'local-git-tag' ? 'tag' : job.kind === 'local-git-clone' ? 'clone'
       : job.kind === 'local-git-fetch' ? 'fetch'
         : job.kind === 'local-git-pull' ? 'pull' : 'inspect') &&
     ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
@@ -86,7 +97,7 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     job.output.every((line: unknown) => typeof line === 'string' && line.length <= 160) &&
     (job.errorCode === null || ['auth', 'forbidden', 'not-found', 'rate-limit',
       'network', 'timeout', 'interrupted', 'git-unavailable', 'git-failed',
-      'output-limit', 'unknown', 'tag-stale', 'tag-exists', 'tag-missing', 'tag-partial', 'release-stale', 'release-uncertain', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
+      'output-limit', 'unknown', 'tag-stale', 'tag-exists', 'tag-missing', 'tag-partial', 'release-stale', 'release-uncertain', 'dispatch-uncertain', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
     (job.retryable === undefined || typeof job.retryable === 'boolean') &&
     (job.linkedRepository === undefined ||
       (job.kind === 'local-git-inspection' && typeof job.linkedRepository === 'string' &&
@@ -97,7 +108,9 @@ function validHistory(raw: unknown): raw is JobRecord[] {
       ? validStoredTagOperation(job.tagOperation) && typeof job.tagRemoteDeleted === 'boolean'
       : job.tagOperation === undefined && job.tagRemoteDeleted === undefined) &&
     (job.kind === 'github-release' ? validStoredReleaseOperation(job.releaseOperation)
-      : job.releaseOperation === undefined))
+      : job.releaseOperation === undefined) &&
+    (job.kind === 'github-workflow-dispatch'
+      ? validStoredDispatch(job.dispatchOperation) : job.dispatchOperation === undefined))
 }
 
 /**
@@ -114,9 +127,11 @@ export class JobManager {
   private scheduled = false
   private readonly pendingTagMessages = new Map<string, string>()
   private readonly pendingReleaseContent = new Map<string, { name?: string; body?: string; assetPath?: string }>()
+  private readonly pendingDispatchInputs = new Map<string, Record<string, string>>()
 
   constructor(private readonly file: string, private readonly github: Inspector,
-    private readonly local?: LocalWorkspaceStore) {
+    private readonly local?: LocalWorkspaceStore,
+    private readonly releaseStrategies?: ReleaseStrategyStore) {
     if (!existsSync(file)) return
     try {
       if (statSync(file).size > 512_000) throw new Error('Oversized activity history')
@@ -127,12 +142,15 @@ export class JobManager {
       for (const job of this.history) {
         if (!activeJob(job.phase)) continue
         job.phase = (job.kind === 'local-git-tag' && job.tagRemoteDeleted) ||
-          (job.kind === 'github-release' && job.startedAt !== null) ? 'partial' : 'interrupted'
+          ((job.kind === 'github-release' || job.kind === 'github-workflow-dispatch') && job.startedAt !== null) ? 'partial' : 'interrupted'
         job.finishedAt = new Date().toISOString()
         job.errorCode = job.kind === 'local-git-tag' ? 'tag-partial' :
-          job.kind === 'github-release' ? 'release-uncertain' : 'interrupted'
-        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release'
-        job.output.push(job.kind === 'github-release'
+          job.kind === 'github-release' ? 'release-uncertain' :
+            job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : 'interrupted'
+        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch'
+        job.output.push(job.kind === 'github-workflow-dispatch'
+          ? 'Interrupted workflow dispatch. Check Actions before dispatching again.'
+          : job.kind === 'github-release'
           ? 'Release action interrupted; verify live GitHub state before another action.'
           : job.kind === 'local-git-tag'
           ? 'Interrupted tag operation; refresh local and origin tags before retrying.'
@@ -290,7 +308,9 @@ export class JobManager {
     const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
     if (!this.local) throw new Error('Local workspace storage is not configured')
     const request = validateTagMutation(raw)
-    if (this.history.some(item => activeJob(item.phase) && isLocal(item.kind) &&
+    if (this.history.some(item => activeJob(item.phase) &&
+      (isLocal(item.kind) || item.kind === 'github-release' ||
+        item.kind === 'github-workflow-dispatch') &&
       item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A local Git operation is already running for this repository')
     }
@@ -323,7 +343,9 @@ export class JobManager {
       throw new Error('Choose a file using the native picker')
     }
     if (request.action !== 'upload-asset' && pickedAssetPath) throw new Error('Unexpected file')
-    if (this.history.some(item => activeJob(item.phase) && item.kind === 'github-release' &&
+    if (this.history.some(item => activeJob(item.phase) &&
+      (item.kind === 'github-release' || item.kind === 'github-workflow-dispatch' ||
+        item.kind === 'local-git-tag') &&
       item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A release action is already running for this repository')
     }
@@ -339,6 +361,40 @@ export class JobManager {
       errorCode: null, retryable: false
     }
     this.pendingReleaseContent.set(record.id, { name, body, assetPath: pickedAssetPath })
+    this.history.unshift(record)
+    this.history = this.history.slice(0, MAX_HISTORY)
+    this.publish()
+    this.schedule()
+    return copy(record)
+  }
+
+  /** Dispatch inputs stay in volatile main memory, and never enter Activity history. */
+  dispatchRelease(ownerValue: string, nameValue: string, raw: WorkflowDispatchRequest): JobRecord {
+    this.list()
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    const input = validateDispatchRequest(raw)
+    if (!this.releaseStrategies) throw new Error('Release strategies are unavailable')
+    const configured = this.releaseStrategies.get(repository)
+    if (configured.kind !== 'dispatch' || configured.workflowId !== input.workflowId ||
+        configured.ref !== input.ref) throw new Error('Release strategy changed; refresh configuration')
+    if (this.history.some(item => activeJob(item.phase) &&
+        (item.kind === 'github-workflow-dispatch' || item.kind === 'github-release' ||
+          item.kind === 'local-git-tag') &&
+        item.repository.toLowerCase() === repository.toLowerCase())) {
+      throw new Error('A remote release operation is already running for this repository')
+    }
+    if (this.history.filter(item => activeJob(item.phase)).length >= 20) {
+      throw new Error('Activity queue is full')
+    }
+    const { inputs, ...safe } = input
+    const record: JobRecord = {
+      id: randomUUID(), kind: 'github-workflow-dispatch', repository, action: 'dispatch',
+      dispatchOperation: safe,
+      requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
+      phase: 'queued', progress: 0, output: ['Workflow dispatch queued.'],
+      errorCode: null, retryable: false
+    }
+    this.pendingDispatchInputs.set(record.id, inputs)
     this.history.unshift(record)
     this.history = this.history.slice(0, MAX_HISTORY)
     this.publish()
@@ -368,7 +424,11 @@ export class JobManager {
     this.controllers.get(id)?.abort()
     this.pendingTagMessages.delete(id)
     this.pendingReleaseContent.delete(id)
-    if (job.kind === 'github-release' && job.phase === 'running') {
+    this.pendingDispatchInputs.delete(id)
+    if (job.kind === 'github-workflow-dispatch' && job.phase === 'running') {
+      this.finish(job, 'partial', 'dispatch-uncertain',
+        'Dispatch interrupted. Inspect Actions and Releases before retrying.')
+    } else if (job.kind === 'github-release' && job.phase === 'running') {
       this.finish(job, 'partial', 'release-uncertain',
         'Release request interrupted; refresh GitHub before retrying.')
     } else if (job.kind === 'local-git-tag' && job.phase === 'running') {
@@ -405,16 +465,32 @@ export class JobManager {
     this.controllers.set(job.id, controller)
     job.startedAt = new Date().toISOString()
     job.phase = 'running'
-    this.line(job, job.kind === 'github-release' ? 'Starting GitHub Release action.' : job.kind === 'local-git-inspection'
+    this.line(job, job.kind === 'github-workflow-dispatch' ? 'Validating workflow dispatch.' : job.kind === 'github-release' ? 'Starting GitHub Release action.' : job.kind === 'local-git-inspection'
       ? 'Starting local Git inspection.' : isLocal(job.kind)
         ? `Starting Git ${job.action}.` : 'Contacting GitHub for repository inspection.', 5)
     let timedOut = false
     const watchdog = setTimeout(() => {
       timedOut = true
       controller.abort()
-    }, job.kind === 'local-git-clone' ? 600_000 : job.kind === 'github-release' ? 150_000 : isLocal(job.kind) && job.kind !== 'local-git-inspection' ? 300_000 : DEADLINE_MS)
+    }, job.kind === 'local-git-clone' ? 600_000 : job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ? 150_000 : isLocal(job.kind) && job.kind !== 'local-git-inspection' ? 300_000 : DEADLINE_MS)
     try {
-      if (job.kind === 'github-release') {
+      if (job.kind === 'github-workflow-dispatch') {
+        if (!job.dispatchOperation || !this.github.dispatchReleaseWorkflow || !this.releaseStrategies) {
+          throw new Error('Workflow dispatch unavailable')
+        }
+        const config = this.releaseStrategies.get(job.repository)
+        if (config.kind !== 'dispatch' || config.workflowId !== job.dispatchOperation.workflowId ||
+            config.ref !== job.dispatchOperation.ref) {
+          throw new Error('Release strategy changed; refresh configuration')
+        }
+        this.line(job, 'Verifying the remote tag and configured workflow.', 20)
+        await this.github.dispatchReleaseWorkflow(owner, name, {
+          ...job.dispatchOperation, inputs: this.pendingDispatchInputs.get(job.id) ?? {}
+        }, controller.signal)
+        if (controller.signal.aborted) return
+        this.line(job, 'GitHub accepted workflow dispatch. Run completion is not yet known.', 100)
+        this.finish(job, 'completed', null, 'Inspect GitHub Actions for the actual workflow run.')
+      } else if (job.kind === 'github-release') {
         if (!job.releaseOperation || !this.github.mutateRelease) {
           throw new Error('Release operation unavailable')
         }
@@ -485,10 +561,10 @@ export class JobManager {
       // GitHub or local Git request fails; never report false full success.
       const hasPartialResult = job.kind === 'repository-inspection'
         ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-      this.finish(job, job.kind === 'github-release' && timedOut
+      this.finish(job, job.kind === 'github-workflow-dispatch' ? 'partial' : job.kind === 'github-release' && timedOut
         ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'partial' : hasPartialResult ? 'partial' : 'failed',
-        job.kind === 'github-release' && timedOut ? 'release-uncertain'
+        job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : job.kind === 'github-release' && timedOut ? 'release-uncertain'
           : job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'tag-partial' : code,
         job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'Origin deletion succeeded; local deletion may remain. Refresh both before continuing.'
@@ -496,6 +572,8 @@ export class JobManager {
             ? 'Tag operation could not finish; refresh local and origin tags before retrying.'
           : job.kind === 'github-release'
             ? 'Release action was not confirmed; inspect GitHub state before retrying.'
+          : job.kind === 'github-workflow-dispatch'
+            ? 'Dispatch was not confirmed. Inspect Actions before retrying.'
           : timedOut ? 'Operation timed out.'
           : code === 'git-unavailable' ? 'Git executable was not found.'
             : code === 'output-limit' ? 'Git output exceeded the safe limit.'
@@ -507,15 +585,17 @@ export class JobManager {
       if (timedOut && activeJob(job.phase)) {
         const partial = job.kind === 'repository-inspection'
           ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-        this.finish(job, job.kind === 'github-release' ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
+        this.finish(job, job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'partial' : partial ? 'partial' : 'failed',
-          job.kind === 'github-release' ? 'release-uncertain' : job.kind === 'local-git-tag' ? 'tag-partial' : 'timeout',
-          job.kind === 'github-release' ? 'Release state uncertain; refresh GitHub.' :
+          job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : job.kind === 'github-release' ? 'release-uncertain' : job.kind === 'local-git-tag' ? 'tag-partial' : 'timeout',
+          job.kind === 'github-workflow-dispatch' ? 'Dispatch state uncertain; check Actions.' :
+            job.kind === 'github-release' ? 'Release state uncertain; refresh GitHub.' :
             job.kind === 'local-git-tag' ? 'Tag state uncertain; refresh both locations.' : 'Operation timed out.')
       }
       this.controllers.delete(job.id)
       this.pendingTagMessages.delete(job.id)
       this.pendingReleaseContent.delete(job.id)
+      this.pendingDispatchInputs.delete(job.id)
       this.schedule()
     }
   }
@@ -551,7 +631,7 @@ export class JobManager {
     if (!activeJob(job.phase)) return
     job.phase = phase
     job.errorCode = errorCode
-    job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'github-release' &&
+    job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch' &&
       (phase === 'cancelled' || errorCode === 'rate-limit' ||
         errorCode === 'network' || errorCode === 'timeout' ||
         errorCode === 'interrupted' || errorCode === 'unknown')
