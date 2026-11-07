@@ -50,6 +50,15 @@ const api: SpindleApi = {
     ipcRenderer.invoke('spindle:github:release-action', owner, name, request),
   pickReleaseAsset: (owner, name, request) =>
     ipcRenderer.invoke('spindle:github:release-pick-asset', owner, name, request),
+  getReleaseStrategy: (owner, name) => ipcRenderer.invoke('spindle:strategy:get', owner, name),
+  saveReleaseStrategy: (owner, name, strategy) =>
+    ipcRenderer.invoke('spindle:strategy:save', owner, name, strategy),
+  listReleaseWorkflows: (owner, name) =>
+    ipcRenderer.invoke('spindle:strategy:workflows', owner, name),
+  pushReleaseTag: (owner, name, tag, oid) =>
+    ipcRenderer.invoke('spindle:strategy:push-tag', owner, name, tag, oid),
+  dispatchReleaseWorkflow: (owner, name, request) =>
+    ipcRenderer.invoke('spindle:strategy:dispatch', owner, name, request),
   listWorkflowRuns: (owner, name) => ipcRenderer.invoke('spindle:github:runs', owner, name),
   getAuthStatus: () => ipcRenderer.invoke('spindle:auth:status'),
   getGitHubIdentity: (refresh = false) => ipcRenderer.invoke('spindle:auth:identity', refresh),
