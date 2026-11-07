@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button'
 import { Busy, Chip, ErrorState, ExternalGitHub } from '../components/common'
 import { readableDate } from '../lib/utils'
 import { RepositoryCheckout } from '../components/local-workspaces'
+import { ReleaseManager } from '../components/release-manager'
 
 type Tab = 'overview' | 'releases' | 'workflows'
 export function RepositoryPage() {
@@ -112,24 +113,9 @@ export function RepositoryPage() {
         <p className="mt-3 text-sm text-[var(--muted)]">{t('readOnlyDescription')}</p>
       </div>
     </div>}
-    {tab === 'releases' && <div className="panel overflow-hidden">
-      {releases.isPending ? <div className="p-6"><Busy/></div> : releases.isError ?
-        <div className="p-5"><ErrorState error={releases.error} retry={() => void releases.refetch()}/></div> :
-        !releases.data.length ? <p className="p-10 text-center text-sm muted">{t('noReleases')}</p> :
-        releases.data.map((release) => <div key={release.id} className="flex items-center gap-4 border-b border-[var(--border)] px-5 py-4 last:border-0">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500"><Tag className="size-5"/></div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{release.name || release.tagName}</span>
-              {release.draft ? <Chip>{t('draft')}</Chip> :
-               release.prerelease ? <Chip tone="orange">{t('prerelease')}</Chip> :
-               <Chip tone="green">{t('published')}</Chip>}
-            </div>
-            <p className="mt-1 text-xs muted">{release.tagName} · {readableDate(release.publishedAt, i18n.language)}</p>
-          </div>
-          <ExternalGitHub url={release.htmlUrl}/>
-        </div>)}
-    </div>}
+    {tab === 'releases' && <ReleaseManager owner={owner} name={name}
+      releases={releases.data} pending={releases.isPending}
+      error={releases.error} refresh={() => { void releases.refetch() }}/>}
     {tab === 'workflows' && <div className="panel overflow-hidden">
       {workflows.isPending ? <div className="p-6"><Busy/></div> : workflows.isError ?
         <div className="p-5"><ErrorState error={workflows.error} retry={() => void workflows.refetch()}/></div> :

@@ -1,14 +1,15 @@
 import type { LocalGitInspection } from './git-inspection'
 import type { GitSafetyCode } from './git-safety'
 import type { TagMutationRequest } from './tags'
+import type { SafeReleaseMutation } from './releases'
 
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection' |
-  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag'
+  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag' | 'github-release'
 export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
 export type JobErrorCode = GitSafetyCode | 'forbidden' | 'not-found' | 'rate-limit' |
   'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' |
-  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'unknown'
+  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'release-stale' | 'release-uncertain' | 'unknown'
 
 export interface JobRecord {
   id: string
@@ -24,7 +25,9 @@ export interface JobRecord {
   tagOperation?: Omit<TagMutationRequest, 'message'>
   /** Durable partial-success flag for combined remote-first deletion. */
   tagRemoteDeleted?: boolean
-  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag'
+  /** Safe operation metadata; release notes and native asset paths are transient. */
+  releaseOperation?: SafeReleaseMutation
+  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag' | 'release'
   requestedAt: string
   startedAt: string | null
   finishedAt: string | null

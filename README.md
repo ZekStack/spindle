@@ -7,10 +7,10 @@ Spindle brings repositories, releases, and GitHub Actions from multiple
 GitHub organizations into one desktop workspace. Add the organizations and
 repositories you want to follow without a predefined catalog.
 
-> **Status: R1 foundation (early development).** The UI can currently discover,
-> track and inspect repositories, releases and workflow runs, and inspect
-> local Git checkouts. It does **not yet** create tags, publish releases,
-> dispatch workflows, or clone/fetch/pull local repositories.
+> **Status: active roadmap development.** Spindle supports local workspaces,
+> guarded Git tag operations and basic GitHub Release lifecycle actions.
+> GitHub Actions management and real installed-desktop acceptance remain open.
+> Do not use early builds as a production release automation system.
 
 ## Stack
 
@@ -127,8 +127,26 @@ local files, and never mutate GitHub. Stale/missing paths remain visible
 until relinked, rather than silently selecting a different directory.
 Locations are saved in a separate, private Electron user-data file
 (`local-workspaces.json`), without Git credentials, remote URLs or raw
-Git output. Clone/fetch/pull remain unimplemented; native OS acceptance
-for folder selection, persistence and relinking is still outstanding.
+Git output. Clone/fetch/fast-forward-only pull and Git tag lifecycle actions
+are available with Activity progress. Native OS acceptance for the complete
+workflow is still outstanding.
+
+## GitHub Release management (M4.2)
+
+From a repository's **Releases** tab, enter an existing remote Git tag and
+verify its object and exact commit SHA before creating a draft. Drafts can be
+edited, published as stable or prerelease, or deleted. Existing releases can
+have their title/notes updated and assets uploaded via the native file picker.
+Uploads are limited to 32 MiB per file and never overwrite an asset with the
+same name. Deleting a GitHub Release does **not** delete its Git tag, and tag
+deletion does **not** delete the Release.
+
+Mutations re-check the selected release, remote tag SHA and modification time
+immediately before the GitHub API request; they are recorded in Activity
+without storing release notes, file paths or credentials. Cancellation or
+timeout may leave uncertain remote state: refresh GitHub before retrying.
+Publishing does not change the repository's latest-release marker. Real
+Windows/Linux mutation acceptance against disposable repositories is open.
 
 ## Architecture and security
 

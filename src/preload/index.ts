@@ -42,6 +42,14 @@ const api: SpindleApi = {
   searchRepositories: (query, page) => ipcRenderer.invoke('spindle:github:search-repos', query, page),
   getRepository: (owner, name) => ipcRenderer.invoke('spindle:github:repository', owner, name),
   listReleases: (owner, name) => ipcRenderer.invoke('spindle:github:releases', owner, name),
+  previewReleaseTag: (owner, name, tag) =>
+    ipcRenderer.invoke('spindle:github:release-tag', owner, name, tag),
+  getReleaseDetails: (owner, name, id) =>
+    ipcRenderer.invoke('spindle:github:release-detail', owner, name, id),
+  mutateRelease: (owner, name, request) =>
+    ipcRenderer.invoke('spindle:github:release-action', owner, name, request),
+  pickReleaseAsset: (owner, name, request) =>
+    ipcRenderer.invoke('spindle:github:release-pick-asset', owner, name, request),
   listWorkflowRuns: (owner, name) => ipcRenderer.invoke('spindle:github:runs', owner, name),
   getAuthStatus: () => ipcRenderer.invoke('spindle:auth:status'),
   getGitHubIdentity: (refresh = false) => ipcRenderer.invoke('spindle:auth:identity', refresh),
