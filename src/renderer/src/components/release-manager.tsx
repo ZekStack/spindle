@@ -12,6 +12,7 @@ import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { readableDate } from '../lib/utils'
 import { ReleaseStrategyPanel } from './release-strategy-panel'
+import { ReleaseProgressPanel } from './release-progress-panel'
 
 type Action = 'create-draft' | 'edit-notes' | 'publish' | 'delete-release' | 'upload-asset'
 interface Props {
@@ -136,6 +137,7 @@ export function ReleaseManager({ owner, name, releases, pending, error, refresh 
       </div>
     </div>
     <ReleaseStrategyPanel owner={owner} name={name} onApiCreate={() => start('create-draft')}/>
+    <ReleaseProgressPanel owner={owner} name={name}/>
     {pending ? <Busy/> : error ? <ErrorState error={error} retry={refresh}/> :
       !releases?.length ? <p className="py-6 text-center text-sm text-[var(--muted)]">{t('noReleases')}</p> :
       <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
