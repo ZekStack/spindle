@@ -9,6 +9,11 @@ import {
   type ReleaseDetails, type ReleaseTagPreview, type ReleaseMutationRequest,
   validateReleaseMutation
 } from '../shared/releases'
+import {
+  classifyReleaseProgress, correlateReleaseRuns, validateReleaseProgressTarget,
+  type ReleaseProgressTarget, type ReleaseProgressSnapshot, type ReleaseRunEvidence,
+  type ReleaseEvidence, type TagEvidence
+} from '../shared/release-progress'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { managedGitHubToken } from './managed-token'
@@ -481,6 +486,110 @@ export class GitHubClient {
     await this.releaseRequest(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/workflows/${request.workflowId}/dispatches`,
       'POST', { ref: request.ref, inputs: request.inputs }, signal)
+  }
+
+  /**
+   * Read-only evidence gathering. A missing resource is not silently equated
+   * with a failed workflow; every HTTP failure except expected 404 propagates.
+   * A response never triggers a retry of a remote write.
+   */
+  async releaseProgress(ownerValue: string, nameValue: string,
+    input: ReleaseProgressTarget, signal?: AbortSignal): Promise<ReleaseProgressSnapshot> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const target = validateReleaseProgressTarget(input)
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    // Establish repository access before treating a ref/release 404 as absence.
+    await this.repository(owner, name, signal)
+    let tag: ReleaseTagPreview | null = null
+    let tagState: TagEvidence = 'absent'
+    try {
+      tag = await this.releaseTag(owner, name, target.tagName, signal)
+      tagState = target.expectedTagOid && tag.tagOid !== target.expectedTagOid
+        ? 'changed' : 'matched'
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('not found or inaccessible')) {
+        throw error
+      }
+    }
+
+    type RawReleaseEvidence = {
+      id: number; tag_name: string; draft: boolean; prerelease: boolean;
+      html_url: string; assets: Array<{ name: string }>;
+    }
+    let release: RawReleaseEvidence | null = null
+    let releaseState: ReleaseEvidence = 'absent'
+    try {
+      release = await this.request<RawReleaseEvidence>(
+        `${prefix}/releases/tags/${encodeURIComponent(target.tagName)}`, signal)
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('not found or inaccessible')) {
+        throw error
+      }
+      // Drafts may not resolve through the by-tag endpoint; list safely,
+      // but do not assert absence if the bounded result is incomplete.
+      const found = await this.requestWithMeta<Array<{
+        id: number; tag_name: string; draft: boolean
+      }>>(`${prefix}/releases?per_page=100`, signal)
+      const candidate = found.data.find(value => value.tag_name === target.tagName)
+      if (candidate) {
+        const details = await this.releaseDetails(owner, name, candidate.id, signal)
+        release = {
+          id: details.id, tag_name: details.tagName, draft: details.draft,
+          prerelease: details.prerelease, html_url: details.htmlUrl,
+          assets: details.assets
+        }
+      } else if (found.hasNext) releaseState = 'unavailable'
+    }
+    if (release) {
+      if (release.tag_name !== target.tagName || !Number.isSafeInteger(release.id) ||
+        release.id <= 0 || !Array.isArray(release.assets)) {
+        throw new Error('GitHub returned inconsistent release metadata')
+      }
+      releaseState = release.draft ? 'draft' : release.prerelease ? 'prerelease' : 'published'
+    }
+    const assets = release?.assets ?? []
+    const runs: ReleaseRunEvidence[] = []
+    let truncated = false
+    if (target.workflowId !== null) {
+      const event = target.kind === 'dispatch' ? 'workflow_dispatch' : 'push'
+      for (let page = 1; page <= 2; page++) {
+        const response = await this.requestWithMeta<{ workflow_runs: Array<{
+          id: number; workflow_id: number; event: string;
+          status: string; conclusion: string | null;
+          head_sha: string; head_branch: string | null;
+          created_at: string; html_url: string;
+        }> }>(
+          `${prefix}/actions/workflows/${target.workflowId}/runs?event=${event}&per_page=100&page=${page}`,
+          signal)
+        for (const run of response.data.workflow_runs) {
+          if (!Number.isSafeInteger(run.id) || run.id <= 0 ||
+            run.workflow_id !== target.workflowId ||
+            typeof run.created_at !== 'string' || typeof run.head_sha !== 'string') continue
+          runs.push({
+            id: run.id, workflowId: run.workflow_id, event: run.event,
+            status: run.status, conclusion: run.conclusion,
+            headSha: run.head_sha, headBranch: run.head_branch,
+            createdAt: run.created_at, htmlUrl: run.html_url
+          })
+        }
+        if (!response.hasNext) break
+        if (page === 2) truncated = true
+      }
+    }
+    const run = correlateReleaseRuns(target, tag?.commitSha ?? null, runs, truncated)
+    const result = classifyReleaseProgress(target, tagState, releaseState,
+      run.correlation, run.matched)
+    return {
+      target, checkedAt: new Date().toISOString(),
+      tag: { state: tagState, actualOid: tag?.tagOid ?? null,
+        commitSha: tag?.commitSha ?? null },
+      release: { state: releaseState, id: release?.id ?? null,
+        htmlUrl: release?.html_url ?? null,
+        assetCount: assets.length,
+        assetNames: assets.slice(0, 30).map(asset => asset.name.slice(0, 150)) },
+      run, ...result
+    }
   }
 
   async workflowRuns(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<WorkflowRun[]> {
