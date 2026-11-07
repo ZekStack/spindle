@@ -94,7 +94,7 @@ test('workflow controls strictly validate union shape and persisted data has no 
     { ...dispatch, ref: '../main' },
     { ...dispatch, refType: 'other' },
     { ...dispatch, expectedRefOid: 'bad' },
-    { ...dispatch, inputs: { version: 'a\nsecret' } },
+    { ...dispatch, inputs: { version: 'a\u0000secret' } },
     { ...dispatch, inputs: { __proto__: 'value', nested: { x: 1 } } },
     { ...dispatch, extra: 'token' },
     { ...runAction, runId: -1 },
