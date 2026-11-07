@@ -15,8 +15,8 @@ type BaseProps = {
 const inputName = (name: string): string => name
 
 /** Two-stage preview and confirmation. Values stay in renderer state and transient main memory only. */
-export function WorkflowDispatchControl({ owner, name, source, onAccepted }:
-  BaseProps & { source: WorkflowSource }) {
+export function WorkflowDispatchControl({ owner, name, source, onAccepted, authenticated }:
+  BaseProps & { source: WorkflowSource; authenticated: boolean }) {
   const { t } = useTranslation()
   const [ref, setRef] = useState(source.branch)
   const [refType, setRefType] = useState<WorkflowRefType>('branch')
@@ -33,7 +33,7 @@ export function WorkflowDispatchControl({ owner, name, source, onAccepted }:
     setConfirm(false)
     setError('')
   }, [owner, name, source.workflow.id, source.branch])
-  const eligible = source.workflow.state === 'active' &&
+  const eligible = authenticated && source.workflow.state === 'active' &&
     source.sourceState === 'parsed' &&
     source.triggers.some(trigger => trigger.event === 'workflow_dispatch')
 
@@ -94,7 +94,8 @@ export function WorkflowDispatchControl({ owner, name, source, onAccepted }:
       <Button size="sm" variant="secondary" disabled={!eligible || busy || !ref.trim()}
         onClick={() => void check()}>{t('wfControlVerify')}</Button>
     </div>
-    {!eligible && <p className="text-xs text-amber-400">{t('wfControlDispatchUnavailable')}</p>}
+    {!authenticated && <p className="text-xs text-amber-400">{t('wfControlSignIn')}</p>}
+    {authenticated && !eligible && <p className="text-xs text-amber-400">{t('wfControlDispatchUnavailable')}</p>}
     {preview && <div className="space-y-3 rounded-lg bg-[var(--surface-2)] p-3">
       <div className="space-y-1 text-xs">
         <p>{preview.workflowName} · {preview.refType}: <strong>{preview.ref}</strong></p>
