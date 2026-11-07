@@ -137,7 +137,7 @@ export function WorkflowDispatchControl({ owner, name, source, onAccepted, authe
           {t('wfControlConfirmDispatchHint')}
         </DialogDescription>
         {preview && <div className="mt-3 space-y-2 break-all text-xs">
-          <p>{owner}/{name} · {preview.workflowName}</p>
+          <p>{owner}/{name} · {preview.workflowName} (ID {preview.workflowId})</p>
           <p>{preview.refType}: <strong>{preview.ref}</strong></p>
           <p className="font-mono">{preview.refOid}</p>
           <p>{t('wfControlInputCount', { count: Object.keys(values).length })}</p>
@@ -185,7 +185,8 @@ export function WorkflowRunControlDialog({ owner, name, run, action, onClose, on
         {t('wfControlRunHint')}
       </DialogDescription>
       {run && <div className="mt-3 space-y-2 break-all text-xs">
-        <p>{owner}/{name} · {run.name}</p>
+        <p>{owner}/{name} · {run.name} (workflow ID {run.workflowId})</p>
+        <p>Run ID {run.id}</p>
         <p>#{run.number} · {t('wfAttempt')} {run.attempt} · {run.status} · {run.conclusion ?? '—'}</p>
         <p className="font-mono">{run.headSha}</p>
         <p>{t('wfControlRunWarning')}</p>
