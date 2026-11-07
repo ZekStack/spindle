@@ -3,6 +3,9 @@ import type { GitTagsSnapshot, TagMutationRequest } from './tags'
 import type { ReleaseDetails, ReleaseMutationRequest, ReleaseTagPreview } from './releases'
 import type { ReleaseProgressSnapshot } from './release-progress'
 import type {
+  WorkflowCatalogPage, WorkflowSource, WorkflowRunsFilter, WorkflowRunsPage
+} from './workflow-discovery'
+import type {
   ReleaseStrategy, WorkflowChoices, WorkflowDispatchRequest
 } from './release-strategies'
 // The renderer knows only these data shapes and the methods exposed by preload.
@@ -147,6 +150,10 @@ export interface SpindleApi {
   pushReleaseTag(owner: string, name: string, tag: string, oid: string): Promise<JobRecord>
   dispatchReleaseWorkflow(owner: string, name: string, request: WorkflowDispatchRequest): Promise<JobRecord>
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
+  listWorkflowCatalog(owner: string, name: string, page: number): Promise<WorkflowCatalogPage>
+  getWorkflowSource(owner: string, name: string, workflowId: number): Promise<WorkflowSource>
+  listWorkflowRunPage(owner: string, name: string, workflowId: number,
+    filter: WorkflowRunsFilter): Promise<WorkflowRunsPage>
   getAuthStatus(): Promise<AuthStatus>
   getGitHubIdentity(refresh?: boolean): Promise<GitHubIdentity>
   getDeviceAuthSetup(): Promise<DeviceAuthSetup>
