@@ -160,6 +160,13 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:strategy:dispatch', (owner: string, name: string, request: WorkflowDispatchRequest) =>
     jobs.dispatchRelease(owner, name, request))
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
+  handle('spindle:workflows:catalog', (owner: string, name: string, page: number) =>
+    github.workflowCatalog(owner, name, page))
+  handle('spindle:workflows:source', (owner: string, name: string, workflowId: number) =>
+    github.workflowSource(owner, name, workflowId))
+  handle('spindle:workflows:runs', (owner: string, name: string, workflowId: number,
+    filter: import('../shared/workflow-discovery').WorkflowRunsFilter) =>
+    github.workflowRunPage(owner, name, workflowId, filter))
   handle('spindle:auth:status', () => github.authStatus())
   handle('spindle:auth:identity', (refresh: boolean = false) => github.identity(refresh === true))
   handle('spindle:auth:device-setup', () => githubDeviceAuth.setup())
