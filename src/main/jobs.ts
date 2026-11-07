@@ -166,13 +166,14 @@ export class JobManager {
         job.finishedAt = new Date().toISOString()
         job.errorCode = job.kind === 'local-git-tag' ? 'tag-partial' :
           job.kind === 'github-release' ? 'release-uncertain' :
-            job.kind === 'github-workflow-control' &&
-          (timedOut || error instanceof WorkflowMutationUncertainError) ? 'workflow-uncertain' :
-        job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' :
-              job.kind === 'github-workflow-control' ? 'workflow-uncertain' : 'interrupted'
-        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch' && job.kind !== 'github-workflow-control' && job.kind !== 'github-workflow-control'
+          job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' :
+          job.kind === 'github-workflow-control' && job.startedAt !== null
+            ? 'workflow-uncertain' : 'interrupted'
+        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch' && job.kind !== 'github-workflow-control'
         job.output.push(job.kind === 'github-workflow-control'
-          ? 'Workflow action interrupted. Inspect the live run before another action.'
+          ? job.startedAt !== null
+            ? 'Workflow action interrupted. Inspect the live run before another action.'
+            : 'Queued workflow action was not submitted before restart.'
           : job.kind === 'github-workflow-dispatch'
           ? 'Interrupted workflow dispatch. Check Actions before dispatching again.'
           : job.kind === 'github-release'
@@ -717,6 +718,8 @@ export class JobManager {
         job.kind === 'github-workflow-dispatch' ? 'partial' : job.kind === 'github-release' && timedOut
         ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'partial' : hasPartialResult ? 'partial' : 'failed',
+        job.kind === 'github-workflow-control' &&
+          (timedOut || error instanceof WorkflowMutationUncertainError) ? 'workflow-uncertain' :
         job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : job.kind === 'github-release' && timedOut ? 'release-uncertain'
           : job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'tag-partial' : code,
         job.kind === 'github-workflow-control'
