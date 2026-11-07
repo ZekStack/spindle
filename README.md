@@ -131,6 +131,30 @@ Git output. Clone/fetch/fast-forward-only pull and Git tag lifecycle actions
 are available with Activity progress. Native OS acceptance for the complete
 workflow is still outstanding.
 
+## GitHub Actions workflow discovery (M5.1)
+
+The **Workflows** tab lists workflow files using GitHub's server-paginated
+Actions workflow API (50 per page). Select a workflow to inspect its
+configuration in the repository's **current default branch**. Spindle
+reads up to 128 KiB of YAML, displays declared events, simple trigger
+filters, workflow_dispatch input names/types/required flags/choice
+options, top-level GITHUB_TOKEN permissions and job overrides. It does
+not execute expressions or assume that requested permissions are the
+effective credentials at runtime. GitHub reported OAuth scopes, if
+available, appear separately with an explicit warning that they do not
+prove repository write access.
+
+The tab also offers per-workflow run pages (30 each) with branch/tag,
+event and status filters, plus full commit SHA, run number, attempt and
+GitHub link. Workflow name/path and active-state search filters the
+**currently loaded workflow page**; it is not represented as a global
+repository search. API access errors and incomplete workflow files
+are reported, rather than being mistaken for an absence of triggers.
+
+This stage is **read-only**. M5.2 introduces workflow controls; M5.3
+introduces live job and log inspection. Real public/private repository
+and installed Windows/Linux acceptance remains in the roadmap.
+
 ## Release progress and recovery (M4.4)
 
 The Releases tab includes a read-only progress panel for previously queued
