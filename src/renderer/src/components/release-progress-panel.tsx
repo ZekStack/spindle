@@ -35,6 +35,7 @@ export function ReleaseProgressPanel({ owner, name }: Props) {
   const [startedAt, setStartedAt] = useState(0)
   const [requestError, setRequestError] = useState(false)
   const [reading, setReading] = useState(false)
+  const [deadlineReached, setDeadlineReached] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -63,6 +64,7 @@ export function ReleaseProgressPanel({ owner, name }: Props) {
     setSnapshot(null)
     setChecks(0)
     setRequestError(false)
+    setDeadlineReached(false)
   }
 
   function inspect() {
@@ -71,17 +73,17 @@ export function ReleaseProgressPanel({ owner, name }: Props) {
     setChecks(0)
     setRequestError(false)
     setStartedAt(Date.now())
+    setDeadlineReached(false)
     setSession(value => value + 1)
     setWatching(true)
   }
 
-  const elapsed = startedAt > 0 ? Date.now() - startedAt : 0
-  const exhausted = checks >= RELEASE_POLL_MAX_CHECKS ||
-    (watching && elapsed >= RELEASE_POLL_MAX_MS)
+  const observedTimeout = deadlineReached
 
   useEffect(() => {
     if (!watching || !selectedId || !startedAt) return
     if (checks >= RELEASE_POLL_MAX_CHECKS || Date.now() - startedAt >= RELEASE_POLL_MAX_MS) {
+      setDeadlineReached(true)
       setWatching(false)
       return
     }
@@ -109,10 +111,7 @@ export function ReleaseProgressPanel({ owner, name }: Props) {
     return () => { cancelled = true; clearTimeout(timer) }
   }, [watching, selectedId, session, checks, startedAt])
 
-  const stoppedAtLimit = !watching && startedAt > 0 && checks >= RELEASE_POLL_MAX_CHECKS &&
-    !snapshot?.settled
-  const observedTimeout = exhausted || stoppedAtLimit
-  const statusKey = snapshot ? `progressOutcome_${snapshot.outcome}` : ''
+   const statusKey = snapshot ? `progressOutcome_${snapshot.outcome}` : ''
   const run = snapshot?.run.matched ?? null
   const tagEvidence = snapshot?.tag.state ?? 'unavailable'
   const releaseEvidence = snapshot?.release.state ?? 'unavailable'
