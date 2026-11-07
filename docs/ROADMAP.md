@@ -344,6 +344,25 @@ Release, and CI-generated release workflow.
 - [ ] **M4.2 — Release lifecycle.** Create draft releases from an existing
       tag, edit notes, publish/prerelease, upload assets, and remove a
       Release separately from its tag. Show exact commit SHA and status.
+      Engineering work: [x] preview and peel the exact remote tag ref to its
+      commit SHA, including annotated tags; [x] refuse draft creation unless
+      the tag exists and matches the confirmed object SHA; [x] enforce
+      release ID, tag ref, mutable state and last-updated checks on live GitHub
+      data before editing, publishing, uploading or deleting; [x] create only
+      drafts, never silently create/move tags, and require explicit publish
+      choice between stable and prerelease (without moving GitHub's
+      latest-release marker); [x] bounded native-picker asset upload with
+      duplicate filename rejection; [x] independent release-only deletion
+      with a clear tag-preservation warning; [x] EN/HU dialogs and
+      main-process Activity history without persisted release notes, file
+      paths or credentials; [x] regression tests for validation and remote
+      failure modes.
+      **Remaining acceptance:** installed Linux Mint and Windows UI tests,
+      real read/write repository permissions and OAuth scopes, GitHub API
+      mutation/asset upload tests on a disposable repository, published
+      release and tag independence checks, and interrupted-network recovery.
+      A cancelled/timed-out remote request is uncertain until live GitHub
+      state is refreshed; do not automatically retry mutations.
 - [ ] **M4.3 — Release strategies.** Per-repository configuration for
       **tag-push workflow**, **workflow_dispatch**, or **GitHub API** release
       creation; discover defaults rather than hardcoding workflow names.
