@@ -1,3 +1,10 @@
+import { readFile, stat } from 'node:fs/promises'
+import { basename } from 'node:path'
+import { TAG_OID_PATTERN, validateTagName } from '../shared/tags'
+import {
+  type ReleaseDetails, type ReleaseTagPreview, type ReleaseMutationRequest,
+  validateReleaseMutation
+} from '../shared/releases'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { managedGitHubToken } from './managed-token'
@@ -257,6 +264,160 @@ export class GitHubClient {
     return result.map((r) => ({ id: r.id, tagName: r.tag_name, name: r.name,
       draft: r.draft, prerelease: r.prerelease, publishedAt: r.published_at, htmlUrl: r.html_url }))
   }
+
+  /** A GitHub tag ref may point to a commit or to an annotated tag object. */
+  async releaseTag(ownerValue: string, nameValue: string, tagValue: string,
+    signal?: AbortSignal): Promise<ReleaseTagPreview> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const tag = validateTagName(tagValue)
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    const raw = await this.request<{ object: { sha: string; type: string } }>(
+      `${prefix}/git/ref/tags/${tag.split('/').map(encodeURIComponent).join('/')}`, signal)
+    const oid = raw.object.sha
+    if (!TAG_OID_PATTERN.test(oid)) throw new Error('GitHub returned an invalid tag object')
+    let object = raw.object
+    for (let depth = 0; depth < 8 && object.type === 'tag'; depth++) {
+      const next = await this.request<{ object: { sha: string; type: string } }>(
+        `${prefix}/git/tags/${object.sha}`, signal)
+      object = next.object
+    }
+    if (object.type !== 'commit' || !TAG_OID_PATTERN.test(object.sha)) {
+      throw new Error('Tag does not point to a verified commit')
+    }
+    return { name: tag, tagOid: oid, commitSha: object.sha }
+  }
+
+  async releaseDetails(ownerValue: string, nameValue: string, id: number,
+    signal?: AbortSignal): Promise<ReleaseDetails> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Invalid release ID')
+    const raw = await this.request<{
+      id: number; tag_name: string; name: string | null; body: string | null;
+      draft: boolean; prerelease: boolean; immutable?: boolean;
+      published_at: string | null; updated_at: string; html_url: string;
+      assets: Array<{ id: number; name: string; size: number; state: string }>
+    }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/releases/${id}`, signal)
+    const tagName = validateTagName(raw.tag_name)
+    let ref: ReleaseTagPreview | null = null
+    try {
+      ref = await this.releaseTag(owner, name, tagName, signal)
+    } catch (error) {
+      // A deleted tag must not prevent deleting its independent GitHub Release.
+      // Other failures remain explicit, never reclassified as an absent tag.
+      if (!(error instanceof Error) || !error.message.includes('not found or inaccessible')) {
+        throw error
+      }
+    }
+    return {
+      id: raw.id, tagName, name: raw.name, body: raw.body ?? '',
+      draft: raw.draft, prerelease: raw.prerelease, immutable: raw.immutable === true,
+      publishedAt: raw.published_at, updatedAt: raw.updated_at, htmlUrl: raw.html_url,
+      assets: raw.assets.map(a => ({ id: a.id, name: a.name, size: a.size, state: a.state })),
+      tagOid: ref?.tagOid ?? null, commitSha: ref?.commitSha ?? null
+    }
+  }
+
+  /** Mutations use the active main-process identity and never expose the token over IPC. */
+  private async releaseRequest(path: string, method: 'POST' | 'PATCH' | 'DELETE',
+    body: Record<string, unknown> | Buffer | null, signal: AbortSignal): Promise<any> {
+    const { token } = await this.credentials.get()
+    if (!token) throw new Error('GitHub authentication is required for release mutations')
+    let response: Response
+    try {
+      response = await this.requestFn(
+        (Buffer.isBuffer(body) ? 'https://uploads.github.com' : BASE) + path,
+        {
+          method, signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'Spindle-Desktop',
+            Authorization: `Bearer ${token}`,
+            'Content-Type': Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json',
+            ...(Buffer.isBuffer(body) ? { 'Content-Length': String(body.length) } : {})
+          },
+          ...(body === null ? {} : { body: Buffer.isBuffer(body) ? body : JSON.stringify(body) })
+        }
+      )
+    } catch {
+      throw new Error('GitHub connection failed. Refresh release status before retrying.')
+    }
+    if (response.status === 401) throw new Error('GitHub authentication expired or is invalid.')
+    if (response.status === 403) throw new Error('GitHub denied this account access to releases.')
+    if (response.status === 404) throw new Error('GitHub release not found or inaccessible.')
+    if (response.status === 409 || response.status === 422) {
+      throw new Error('GitHub rejected this release change. Refresh before retrying.')
+    }
+    if (response.status === 429) throw new Error('GitHub API rate limit reached.')
+    if (!response.ok) throw new Error(`GitHub release operation failed (HTTP ${response.status}).`)
+    if (response.status === 204) return null
+    return response.json()
+  }
+
+  async mutateRelease(ownerValue: string, nameValue: string, input: ReleaseMutationRequest,
+    signal: AbortSignal, pickedAssetPath?: string): Promise<void> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const request = validateReleaseMutation(input)
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    if (request.action === 'create-draft') {
+      const tag = await this.releaseTag(owner, name, request.tagName, signal)
+      if (tag.tagOid !== request.expectedTagOid) throw new Error('Release tag changed since confirmation')
+      await this.releaseRequest(`${prefix}/releases`, 'POST', {
+        tag_name: tag.name, name: request.name, body: request.body,
+        draft: true, prerelease: false, make_latest: 'false'
+      }, signal)
+      return
+    }
+    const details = await this.releaseDetails(owner, name, request.releaseId!, signal)
+    if (details.tagName !== request.tagName ||
+        details.tagOid !== request.expectedTagOid ||
+        details.updatedAt !== request.expectedUpdatedAt) {
+      throw new Error('Release changed since confirmation. Refresh before retrying.')
+    }
+    if (details.immutable) throw new Error('GitHub marks this release immutable.')
+    const url = `${prefix}/releases/${request.releaseId}`
+    switch (request.action) {
+      case 'edit-notes':
+        await this.releaseRequest(url, 'PATCH', { name: request.name, body: request.body }, signal)
+        break
+      case 'publish':
+        if (!details.draft || !details.commitSha) {
+          throw new Error('Only a draft with an existing verified tag can be published.')
+        }
+        await this.releaseRequest(url, 'PATCH', {
+          draft: false, prerelease: request.prerelease, make_latest: 'false'
+        }, signal)
+        break
+      case 'delete-release':
+        await this.releaseRequest(url, 'DELETE', null, signal)
+        break
+      case 'upload-asset': {
+        if (!pickedAssetPath) throw new Error('Select an asset using the native file picker')
+        const fileName = basename(pickedAssetPath)
+        if (!fileName || fileName === '.' || fileName.length > 150 ||
+            /[\\/\x00-\x1f\x7f]/.test(fileName)) throw new Error('Invalid asset name')
+        if (details.assets.some(a => a.name === fileName)) {
+          throw new Error('An asset with that name already exists. No asset was overwritten.')
+        }
+        const info = await stat(pickedAssetPath)
+        if (!info.isFile() || info.size < 1 || info.size > 32 * 1024 * 1024) {
+          throw new Error('Asset must be a file between 1 byte and 32 MiB')
+        }
+        const buffer = await readFile(pickedAssetPath)
+        if (buffer.length !== info.size || signal.aborted) {
+          throw new Error('Asset changed or upload was cancelled.')
+        }
+        await this.releaseRequest(
+          `${url}/assets?name=${encodeURIComponent(fileName)}`,
+          'POST', buffer, signal)
+        break
+      }
+    }
+  }
+
   async workflowRuns(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<WorkflowRun[]> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)
