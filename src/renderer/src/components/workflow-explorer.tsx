@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GitBranch, GitCommitHorizontal, RefreshCw, Workflow } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Busy, Chip, ErrorState, ExternalGitHub } from './common'
 import { Button } from './ui/button'
 import { readableDate } from '../lib/utils'
-import type { WorkflowRunsFilter } from '../../../shared/workflow-discovery'
+import type { WorkflowRunsFilter, WorkflowRunSummary } from '../../../shared/workflow-discovery'
+import { workflowActionAllowed, type WorkflowControlAction } from '../../../shared/workflow-controls'
+import { WorkflowDispatchControl, WorkflowRunControlDialog } from './workflow-controls'
 
 interface Props { owner: string; name: string }
 
 /** Read-only workflow discovery. All remote pagination is explicit and bounded. */
 export function WorkflowExplorer({ owner, name }: Props) {
   const { t, i18n } = useTranslation()
+  const cache = useQueryClient()
+  const [command, setCommand] = useState<{
+    run: WorkflowRunSummary; action: Exclude<WorkflowControlAction, 'dispatch'>
+  } | null>(null)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [onlyActive, setOnlyActive] = useState(false)
@@ -56,14 +62,21 @@ export function WorkflowExplorer({ owner, name }: Props) {
     setBranch('')
     setEvent('')
     setStatus('')
+    setCommand(null)
   }, [owner, name])
 
   function chooseWorkflow(id: number) {
+    setCommand(null)
     setSelected(id)
     setRunPage(1)
     setBranch('')
     setEvent('')
     setStatus('')
+  }
+  function accepted() {
+    void cache.invalidateQueries({ queryKey: ['workflow-runs-page', owner, name] })
+    void cache.invalidateQueries({ queryKey: ['workflow-catalog', owner, name] })
+    window.dispatchEvent(new Event('spindle:activity:open'))
   }
   function refresh() {
     void catalog.refetch()
@@ -175,6 +188,8 @@ export function WorkflowExplorer({ owner, name }: Props) {
                     </div> : <p className="mt-2 text-xs text-[var(--muted)]">{t('wfNoDispatchInputs')}</p>
                 ) : <p className="mt-2 text-xs text-[var(--muted)]">{t('wfNoDispatchEvent')}</p>}
               </div>
+              <WorkflowDispatchControl owner={owner} name={name} source={current}
+                onAccepted={accepted}/>
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold">{t('wfPermissions')}</h4>
                 <p className="text-xs text-[var(--muted)]">{t('wfPermissionsHint')}</p>
@@ -247,7 +262,18 @@ export function WorkflowExplorer({ owner, name }: Props) {
               <p className="break-all font-mono text-[var(--muted)]">{run.headSha}</p>
               <p className="text-[var(--muted)]">{readableDate(run.createdAt, i18n.language)}</p>
             </div>
-            <ExternalGitHub url={run.htmlUrl}/>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <ExternalGitHub url={run.htmlUrl}/>
+              {identity.data?.state === 'authenticated' && <div className="flex flex-wrap justify-end gap-1">
+                {(['cancel', 'rerun', 'rerun-failed'] as const).filter(action =>
+                  workflowActionAllowed(action, run.status, run.conclusion)).map(action =>
+                    <Button key={action} variant="secondary" size="sm"
+                      onClick={() => setCommand({ run, action })}>
+                      {t(action === 'cancel' ? 'wfControlCancel' :
+                        action === 'rerun' ? 'wfControlRerun' : 'wfControlRerunFailed')}
+                    </Button>)}
+              </div>}
+            </div>
           </div>)}
         </div>}
       <div className="flex items-center justify-between gap-2">
@@ -262,5 +288,8 @@ export function WorkflowExplorer({ owner, name }: Props) {
           onClick={() => setRunPage(p => p + 1)}>{t('showMore')}</Button>
       </div>
     </section>}
+    <WorkflowRunControlDialog owner={owner} name={name}
+      run={command?.run ?? null} action={command?.action ?? null}
+      onClose={() => setCommand(null)} onAccepted={accepted}/>
   </div>
 }
