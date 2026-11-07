@@ -61,6 +61,12 @@ const api: SpindleApi = {
   dispatchReleaseWorkflow: (owner, name, request) =>
     ipcRenderer.invoke('spindle:strategy:dispatch', owner, name, request),
   listWorkflowRuns: (owner, name) => ipcRenderer.invoke('spindle:github:runs', owner, name),
+  listWorkflowCatalog: (owner, name, page) =>
+    ipcRenderer.invoke('spindle:workflows:catalog', owner, name, page),
+  getWorkflowSource: (owner, name, workflowId) =>
+    ipcRenderer.invoke('spindle:workflows:source', owner, name, workflowId),
+  listWorkflowRunPage: (owner, name, workflowId, filter) =>
+    ipcRenderer.invoke('spindle:workflows:runs', owner, name, workflowId, filter),
   getAuthStatus: () => ipcRenderer.invoke('spindle:auth:status'),
   getGitHubIdentity: (refresh = false) => ipcRenderer.invoke('spindle:auth:identity', refresh),
   getDeviceAuthSetup: () => ipcRenderer.invoke('spindle:auth:device-setup'),
