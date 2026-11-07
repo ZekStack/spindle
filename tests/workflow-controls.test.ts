@@ -89,7 +89,7 @@ test('workflow controls strictly validate union shape and persisted data has no 
   const { inputs, ...safe } = dispatch
   assert.equal(validateStoredWorkflowControl(safe), true)
   assert.equal(validateStoredWorkflowControl(dispatch), false)
-  for (const bad of [
+  for (const [index, bad] of [
     { ...dispatch, workflowId: '21' },
     { ...dispatch, ref: '../main' },
     { ...dispatch, refType: 'other' },
@@ -100,7 +100,7 @@ test('workflow controls strictly validate union shape and persisted data has no 
     { ...runAction, runId: -1 },
     { ...runAction, expectedAttempt: 0 },
     { ...runAction, expectedConclusion: 1 }
-  ]) assert.throws(() => validateWorkflowControlRequest(bad))
+  ].entries()) assert.throws(() => validateWorkflowControlRequest(bad), `Invalid input case ${index}`)
 })
 
 test('input validation rejects unknown, missing and invalid typed values', () => {
