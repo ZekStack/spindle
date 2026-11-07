@@ -38,7 +38,8 @@ test('parses YAML triggers, dispatch inputs and permission overrides', () => {
   assert.deepEqual(value.triggers.map(trigger => trigger.event),
     ['push', 'workflow_dispatch', 'schedule'])
   assert.ok(value.triggers[0].filters.some(filter => filter.includes('tags: v*')))
-  assert.equal(value.triggers[2].complex, true)
+  assert.equal(value.triggers[2].complex, false)
+  assert.equal(value.triggers[2].filters[0], 'cron: 0 3 * * 1')
   assert.deepEqual(value.dispatchInputs.map(input => input.name), ['version','verbose'])
   assert.deepEqual(value.dispatchInputs[0].options, ['stable', 'prerelease'])
   assert.equal(value.dispatchInputs[0].required, true)
