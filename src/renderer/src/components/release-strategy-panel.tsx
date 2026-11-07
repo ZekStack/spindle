@@ -48,7 +48,7 @@ export function ReleaseStrategyPanel({ owner, name, onApiCreate }: Props) {
     if (!editing || !strategy) return
     setMode(strategy.kind)
     setWorkflowId(strategy.kind === 'api' ? 0 : strategy.workflowId)
-    setRef(strategy.kind === 'dispatch' ? strategy.ref : (details.data?.defaultBranch ?? 'main'))
+    setRef(strategy.kind === 'dispatch' ? strategy.ref : (details.data?.defaultBranch ?? ''))
   }, [editing, strategy, details.data?.defaultBranch])
 
   const save = useMutation({
@@ -125,7 +125,7 @@ export function ReleaseStrategyPanel({ owner, name, onApiCreate }: Props) {
 
   const selected = active.find(item => item.id === workflowId)
   const ready = mode === 'api' || !!selected && (mode !== 'dispatch' || ref.trim().length > 0)
-  const activeName = strategy?.kind === 'api' ? t('strategyApi') :
+  const activeName = strategy?.kind === 'api' ? '' :
     workflows.data?.items.find(item => item.id === strategy?.workflowId)?.name ?? t('strategyWorkflowUnknown')
   const confirmed = confirmedTag &&
     (confirmedTag.mode === 'tag-push' ? confirmedTag.entry.name === tagName
@@ -138,7 +138,7 @@ export function ReleaseStrategyPanel({ owner, name, onApiCreate }: Props) {
         <p className="mt-1 text-xs text-[var(--muted)]">
           {config.isPending ? t('strategyLoading') : config.isError ? t('strategyLoadFailed')
             : `${t(strategy?.kind === 'tag-push' ? 'strategyTagPush'
-              : strategy?.kind === 'dispatch' ? 'strategyDispatch' : 'strategyApi')} · ${activeName}`}
+              : strategy?.kind === 'dispatch' ? 'strategyDispatch' : 'strategyApi')}${activeName ? ` · ${activeName}` : ''}`}
         </p>
         {strategy?.kind === 'dispatch' && <p className="break-all text-xs text-[var(--muted)]">
           <GitBranch className="mr-1 inline size-3"/>{strategy.ref}
