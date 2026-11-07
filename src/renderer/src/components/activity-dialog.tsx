@@ -25,6 +25,7 @@ function errorKey(code: JobErrorCode | null, localGit = false): string {
     case 'tag-partial': return 'tagErrorPartial'
     case 'release-stale': return 'releaseErrorStale'
     case 'release-uncertain': return 'releaseErrorUncertain'
+    case 'dispatch-uncertain': return 'dispatchErrorUncertain'
     case 'checkout-moved': return 'localSafety_checkout-moved'
     case 'origin-mismatch': return 'localSafety_origin-mismatch'
     case 'detached-head': return 'localSafety_detached-head'
@@ -75,7 +76,8 @@ export function ActivityDialog() {
       : job.kind === 'local-git-fetch' ? 'activityFetch'
         : job.kind === 'local-git-pull' ? 'activityPull'
           : job.kind === 'local-git-tag' ? 'activityTag'
-            : job.kind === 'github-release' ? 'activityRelease' : 'activityInspection')
+            : job.kind === 'github-release' ? 'activityRelease'
+              : job.kind === 'github-workflow-dispatch' ? 'activityDispatch' : 'activityInspection')
 
   async function inspectLocal() {
     setBusy(true)
@@ -182,6 +184,11 @@ export function ActivityDialog() {
                       : detail.releaseOperation.action === 'upload-asset' ? 'releaseUpload'
                         : 'releaseDelete')}: {detail.releaseOperation.tagName}
               </p>}
+              {detail.dispatchOperation && <div className="mt-2 space-y-1 break-all font-mono text-xs text-[var(--muted)]">
+                <p>{t('strategyWorkflow')}: {detail.dispatchOperation.workflowId}</p>
+                <p>{t('strategyTag')}: {detail.dispatchOperation.tagName}</p>
+                <p>{t('strategyDispatchRef')}: {detail.dispatchOperation.ref}</p>
+              </div>}
               {detail.tagRemoteDeleted && detail.phase === 'partial' &&
                 <p role="alert" className="mt-2 text-xs text-amber-400">
                   {t('tagErrorPartial')}
