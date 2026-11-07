@@ -31,7 +31,7 @@ export interface WorkflowJobPermissions {
 export interface WorkflowSource {
   workflow: WorkflowChoice
   branch: string
-  commitSha: string | null
+  fileBlobSha: string | null
   sourceState: WorkflowSourceState
   triggers: WorkflowTrigger[]
   dispatchInputs: WorkflowDispatchInput[]
