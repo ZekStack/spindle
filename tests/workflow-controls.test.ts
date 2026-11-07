@@ -81,7 +81,10 @@ function fake(routes: Record<string, Reply> = {}) {
 }
 
 test('workflow controls strictly validate union shape and persisted data has no inputs', () => {
-  assert.deepEqual(validateWorkflowControlRequest(dispatch).inputs, dispatch.inputs)
+  const validated = validateWorkflowControlRequest(dispatch)
+  assert.equal(validated.action, 'dispatch')
+  if (validated.action !== 'dispatch') throw new Error('Expected dispatch')
+  assert.deepEqual(validated.inputs, dispatch.inputs)
   assert.equal(validateWorkflowControlRequest(runAction).action, 'rerun-failed')
   const { inputs, ...safe } = dispatch
   assert.equal(validateStoredWorkflowControl(safe), true)
