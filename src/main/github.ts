@@ -338,7 +338,7 @@ export class GitHubClient {
             'Content-Type': Buffer.isBuffer(body) ? 'application/octet-stream' : 'application/json',
             ...(Buffer.isBuffer(body) ? { 'Content-Length': String(body.length) } : {})
           },
-          ...(body === null ? {} : { body: Buffer.isBuffer(body) ? body : JSON.stringify(body) })
+          ...(body === null ? {} : { body: Buffer.isBuffer(body) ? new Blob([new Uint8Array(body)]) : JSON.stringify(body) })
         }
       )
     } catch {
