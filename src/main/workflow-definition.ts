@@ -51,6 +51,14 @@ export function parseWorkflowDefinition(source: string): WorkflowDefinition {
     .map(([event, config]) => {
       const configRecord = record(config)
       const filters: string[] = []
+      if (event === 'schedule' && Array.isArray(config)) {
+        for (const schedule of config.slice(0, 12)) {
+          const cron = record(schedule)?.cron
+          if (typeof cron === 'string') filters.push('cron: ' + cron.slice(0, 110))
+        }
+        return { event, filters,
+          complex: config.length > 12 || filters.length !== config.length }
+      }
       let complex = false
       if (configRecord) {
         for (const [key, value] of Object.entries(configRecord).slice(0, 16)) {
