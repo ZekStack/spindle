@@ -188,7 +188,9 @@ export function WorkflowExplorer({ owner, name }: Props) {
                     </div> : <p className="mt-2 text-xs text-[var(--muted)]">{t('wfNoDispatchInputs')}</p>
                 ) : <p className="mt-2 text-xs text-[var(--muted)]">{t('wfNoDispatchEvent')}</p>}
               </div>
+              <p className="text-xs text-[var(--muted)]">{t('wfControlPermissions')}</p>
               <WorkflowDispatchControl owner={owner} name={name} source={current}
+                authenticated={identity.data?.state === 'authenticated'}
                 onAccepted={accepted}/>
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold">{t('wfPermissions')}</h4>
