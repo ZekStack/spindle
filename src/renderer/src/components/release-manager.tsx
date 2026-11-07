@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileUp, Pencil, Plus, RefreshCw, Rocket, Tag, Trash2 } from 'lucide-react'
+import { FileUp, Pencil, RefreshCw, Rocket, Tag, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Release } from '../../../shared/contracts'
 import type {
@@ -11,6 +11,7 @@ import { Busy, Chip, ErrorState, ExternalGitHub } from './common'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { readableDate } from '../lib/utils'
+import { ReleaseStrategyPanel } from './release-strategy-panel'
 
 type Action = 'create-draft' | 'edit-notes' | 'publish' | 'delete-release' | 'upload-asset'
 interface Props {
@@ -131,11 +132,10 @@ export function ReleaseManager({ owner, name, releases, pending, error, refresh 
         <Button variant="secondary" size="sm" onClick={refresh}>
           <RefreshCw className="size-3.5"/>{t('refresh')}
         </Button>
-        <Button size="sm" onClick={() => start('create-draft')}>
-          <Plus className="size-3.5"/>{t('releaseCreateDraft')}
-        </Button>
+
       </div>
     </div>
+    <ReleaseStrategyPanel owner={owner} name={name} onApiCreate={() => start('create-draft')}/>
     {pending ? <Busy/> : error ? <ErrorState error={error} retry={refresh}/> :
       !releases?.length ? <p className="py-6 text-center text-sm text-[var(--muted)]">{t('noReleases')}</p> :
       <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
