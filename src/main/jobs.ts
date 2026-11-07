@@ -308,7 +308,9 @@ export class JobManager {
     const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
     if (!this.local) throw new Error('Local workspace storage is not configured')
     const request = validateTagMutation(raw)
-    if (this.history.some(item => activeJob(item.phase) && isLocal(item.kind) &&
+    if (this.history.some(item => activeJob(item.phase) &&
+      (isLocal(item.kind) || item.kind === 'github-release' ||
+        item.kind === 'github-workflow-dispatch') &&
       item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A local Git operation is already running for this repository')
     }
@@ -341,7 +343,9 @@ export class JobManager {
       throw new Error('Choose a file using the native picker')
     }
     if (request.action !== 'upload-asset' && pickedAssetPath) throw new Error('Unexpected file')
-    if (this.history.some(item => activeJob(item.phase) && item.kind === 'github-release' &&
+    if (this.history.some(item => activeJob(item.phase) &&
+      (item.kind === 'github-release' || item.kind === 'github-workflow-dispatch' ||
+        item.kind === 'local-git-tag') &&
       item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A release action is already running for this repository')
     }
@@ -374,7 +378,8 @@ export class JobManager {
     if (configured.kind !== 'dispatch' || configured.workflowId !== input.workflowId ||
         configured.ref !== input.ref) throw new Error('Release strategy changed; refresh configuration')
     if (this.history.some(item => activeJob(item.phase) &&
-        (item.kind === 'github-workflow-dispatch' || item.kind === 'github-release') &&
+        (item.kind === 'github-workflow-dispatch' || item.kind === 'github-release' ||
+          item.kind === 'local-git-tag') &&
         item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A remote release operation is already running for this repository')
     }
