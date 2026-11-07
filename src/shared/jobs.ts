@@ -26,6 +26,8 @@ export interface JobRecord {
   tagOperation?: Omit<TagMutationRequest, 'message'>
   /** Durable partial-success flag for combined remote-first deletion. */
   tagRemoteDeleted?: boolean
+  /** Captured at tag-push queue time: never infer workflow from later settings. */
+  releaseWorkflowId?: number
   /** Safe operation metadata; release notes and native asset paths are transient. */
   releaseOperation?: SafeReleaseMutation
   /** Workflows, refs and tag SHA are safe; dispatch inputs must remain transient. */
