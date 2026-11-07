@@ -1,6 +1,9 @@
 import type { PullReadiness } from './git-safety'
 import type { GitTagsSnapshot, TagMutationRequest } from './tags'
 import type { ReleaseDetails, ReleaseMutationRequest, ReleaseTagPreview } from './releases'
+import type {
+  ReleaseStrategy, WorkflowChoices, WorkflowDispatchRequest
+} from './release-strategies'
 // The renderer knows only these data shapes and the methods exposed by preload.
 // No filesystem, Node, shell, credentials, or general-purpose IPC access.
 import type { UpdateStatus } from './update-policy'
@@ -136,6 +139,11 @@ export interface SpindleApi {
   getReleaseDetails(owner: string, name: string, releaseId: number): Promise<ReleaseDetails>
   mutateRelease(owner: string, name: string, request: ReleaseMutationRequest): Promise<JobRecord>
   pickReleaseAsset(owner: string, name: string, request: ReleaseMutationRequest): Promise<JobRecord | null>
+  getReleaseStrategy(owner: string, name: string): Promise<ReleaseStrategy>
+  saveReleaseStrategy(owner: string, name: string, strategy: ReleaseStrategy): Promise<ReleaseStrategy>
+  listReleaseWorkflows(owner: string, name: string): Promise<WorkflowChoices>
+  pushReleaseTag(owner: string, name: string, tag: string, oid: string): Promise<JobRecord>
+  dispatchReleaseWorkflow(owner: string, name: string, request: WorkflowDispatchRequest): Promise<JobRecord>
   listWorkflowRuns(owner: string, name: string): Promise<WorkflowRun[]>
   getAuthStatus(): Promise<AuthStatus>
   getGitHubIdentity(refresh?: boolean): Promise<GitHubIdentity>
