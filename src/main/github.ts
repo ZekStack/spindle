@@ -553,16 +553,18 @@ export class GitHubClient {
     let truncated = false
     if (target.workflowId !== null) {
       const event = target.kind === 'dispatch' ? 'workflow_dispatch' : 'push'
+      type RawWorkflowRun = {
+        id: number; workflow_id: number; event: string;
+        status: string; conclusion: string | null;
+        head_sha: string; head_branch: string | null;
+        created_at: string; html_url: string;
+      }
       for (let page = 1; page <= 2; page++) {
-        const response = await this.requestWithMeta<{ workflow_runs: Array<{
-          id: number; workflow_id: number; event: string;
-          status: string; conclusion: string | null;
-          head_sha: string; head_branch: string | null;
-          created_at: string; html_url: string;
-        }> }>(
+        const response: { data: { workflow_runs: RawWorkflowRun[] }; hasNext: boolean } =
+          await this.requestWithMeta<{ workflow_runs: RawWorkflowRun[] }>(
           `${prefix}/actions/workflows/${target.workflowId}/runs?event=${event}&per_page=100&page=${page}`,
           signal)
-        for (const run of response.data.workflow_runs) {
+        for (const run of response.data.workflow_runs as RawWorkflowRun[]) {
           if (!Number.isSafeInteger(run.id) || run.id <= 0 ||
             run.workflow_id !== target.workflowId ||
             typeof run.created_at !== 'string' || typeof run.head_sha !== 'string') continue
