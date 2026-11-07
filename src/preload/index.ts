@@ -65,6 +65,10 @@ const api: SpindleApi = {
     ipcRenderer.invoke('spindle:workflows:catalog', owner, name, page),
   getWorkflowSource: (owner, name, workflowId) =>
     ipcRenderer.invoke('spindle:workflows:source', owner, name, workflowId),
+  previewWorkflowDispatch: (owner, name, workflowId, ref, refType) =>
+    ipcRenderer.invoke('spindle:workflows:dispatch-preview', owner, name, workflowId, ref, refType),
+  controlWorkflow: (owner, name, request) =>
+    ipcRenderer.invoke('spindle:workflows:control', owner, name, request),
   listWorkflowRunPage: (owner, name, workflowId, filter) =>
     ipcRenderer.invoke('spindle:workflows:runs', owner, name, workflowId, filter),
   getAuthStatus: () => ipcRenderer.invoke('spindle:auth:status'),
