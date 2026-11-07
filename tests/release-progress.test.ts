@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { GitHubClient } from '../src/main/github'
 import { JobManager } from '../src/main/jobs'
+import { ReleaseStrategyStore } from '../src/main/release-strategies'
 import {
   classifyReleaseProgress, correlateReleaseRuns, releasePollDelay,
   RELEASE_POLL_MAX_CHECKS, RELEASE_POLL_MAX_MS,
@@ -86,6 +87,14 @@ test('published Release, draft, tampered tag and proven failed run have distinct
   assert.equal(classifyReleaseProgress(sample, 'matched', 'absent', 'none', null).outcome, 'tag-only')
   assert.equal(classifyReleaseProgress({ ...sample, phase: 'running' },
     'absent', 'absent', 'none', null).outcome, 'running')
+  assert.deepEqual(classifyReleaseProgress({ ...sample, kind: 'api', releaseAction: 'upload-asset' },
+    'matched', 'published', 'none', null), {
+    outcome: 'uncertain', recovery: 'inspect-release', settled: true
+  })
+  assert.equal(classifyReleaseProgress({ ...sample, kind: 'api', releaseAction: 'delete-release' },
+    'matched', 'published', 'none', null).outcome, 'uncertain')
+  assert.equal(classifyReleaseProgress({ ...sample, kind: 'api', releaseAction: 'publish' },
+    'matched', 'draft', 'none', null).settled, false)
 })
 
 test('poll interval and observation deadline remain finite', () => {
@@ -223,5 +232,35 @@ test('historical Activity derives attempt provenance after restart without secre
     assert.equal(seen.length, 1)
     assert.equal(seen[0].startedAt, STARTED)
     await assert.rejects(() => manager.releaseProgress(randomUUID()), /not found/)
+  } finally { rmSync(folder, { recursive: true, force: true }) }
+})
+
+test('an accepted workflow dispatch cannot be submitted twice during observation window', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'spindle-repeat-dispatch-'))
+  const settings = new ReleaseStrategyStore(join(folder, 'settings.json'))
+  settings.save('ExampleOrg/demo', { kind: 'dispatch', workflowId: 7, ref: 'main' })
+  const calls: string[] = []
+  const github = {
+    repository: async () => ({} as never),
+    releases: async () => [],
+    workflowRuns: async () => [],
+    dispatchReleaseWorkflow: async () => { calls.push('dispatched') }
+  }
+  try {
+    const manager = new JobManager(join(folder, 'history.json'), github, undefined, settings)
+    const request = {
+      workflowId: 7, ref: 'main', tagName: 'v1.2.3',
+      expectedTagOid: TAG_OID, inputs: { version: 'v1.2.3' }
+    }
+    manager.dispatchRelease('ExampleOrg', 'demo', request)
+    for (let n = 0; n < 100 && manager.list()[0].phase !== 'completed'; n++) {
+      await new Promise<void>(resolve => setTimeout(resolve, 5))
+    }
+    assert.equal(manager.list()[0].phase, 'completed')
+    assert.equal(calls.length, 1)
+    assert.throws(() => manager.dispatchRelease('ExampleOrg', 'demo', request), /Recent dispatch/)
+    const restarted = new JobManager(join(folder, 'history.json'), github, undefined, settings)
+    assert.throws(() => restarted.dispatchRelease('ExampleOrg', 'demo', request), /Recent dispatch/)
+    assert.equal(calls.length, 1)
   } finally { rmSync(folder, { recursive: true, force: true }) }
 })
