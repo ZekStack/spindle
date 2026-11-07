@@ -128,6 +128,8 @@ test('manual dispatch revalidates ref, workflow YAML and inputs before 204 ackno
   assert.equal(preview.refOid, SHA)
   assert.equal(preview.sourceBlobSha, BLOB)
   assert.equal(preview.inputs[0].name, 'version')
+  assert.ok(sent.some(call => call.path.includes('/contents/.github/workflows/release.yml') &&
+    call.path.includes('ref=refs%2Fheads%2Fmain')))
   await client.mutateWorkflowControl('TestOrg', 'demo', dispatch, AbortSignal.timeout(10_000))
   const post = sent.filter(x => x.method === 'POST')
   assert.equal(post.length, 1)
@@ -194,4 +196,16 @@ test('definite rejection is distinct from ambiguous mutation acceptance', async 
   await assert.rejects(() =>
     uncertain.client.mutateWorkflowControl('TestOrg','demo',runAction,AbortSignal.timeout(10_000)),
     WorkflowMutationUncertainError)
+})
+
+test('branch and tag with colliding names are inspected through explicit qualified refs', async () => {
+  const { client, sent } = fake({
+    [prefix + '/git/ref/tags/main']: { body: { object: { sha: SHA, type: 'tag' } } }
+  })
+  const tagged = await client.previewWorkflowDispatch('TestOrg', 'demo', 21, 'main', 'tag')
+  assert.equal(tagged.refType, 'tag')
+  assert.ok(sent.some(call => call.path.includes('/contents/.github/workflows/release.yml') &&
+    call.path.includes('ref=refs%2Ftags%2Fmain')))
+  assert.ok(sent.some(call => call.path.includes('/contents/.github/workflows/release.yml') &&
+    call.path.includes('ref=refs%2Fheads%2Fmain')))
 })
