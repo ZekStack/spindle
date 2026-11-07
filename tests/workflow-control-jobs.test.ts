@@ -129,7 +129,7 @@ test('restart marks started workflow request uncertain without resending it', ()
   } finally { rmSync(folder, { recursive: true, force: true }) }
 })
 
-test('workflow control holds the same-repository mutation lock against draft release creation', () => {
+test('workflow control holds the same-repository mutation lock against draft release creation', async () => {
   const { manager, cleanup } = fixture(async () => {})
   try {
     manager.controlWorkflow('TestOrg', 'demo', rerun)
@@ -138,5 +138,6 @@ test('workflow control holds the same-repository mutation lock against draft rel
       expectedTagOid: SHA, name: 'Draft release', body: ''
     }), /already running/)
     assert.throws(() => manager.controlWorkflow('TestOrg', 'demo', rerun), /already running/)
+    await done(manager)
   } finally { cleanup() }
 })
