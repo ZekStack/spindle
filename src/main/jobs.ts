@@ -427,6 +427,18 @@ export class JobManager {
         item.repository.toLowerCase() === repository.toLowerCase())) {
       throw new Error('A remote release operation is already running for this repository')
     }
+    // GitHub dispatch returns no run ID. A completed/uncertain submission
+    // cannot safely be retried on the same workflow/ref/tag immediately.
+    // The observation window is finite; no other mutation is triggered here.
+    if (this.history.some(item => item.kind === 'github-workflow-dispatch' &&
+      item.repository.toLowerCase() === repository.toLowerCase() &&
+      (item.phase === 'completed' || item.phase === 'partial') &&
+      item.dispatchOperation?.workflowId === input.workflowId &&
+      item.dispatchOperation?.tagName === input.tagName &&
+      item.dispatchOperation?.ref === input.ref &&
+      Date.now() - Date.parse(item.requestedAt) < 10 * 60_000)) {
+      throw new Error('Recent dispatch may already have started this workflow. Inspect GitHub Actions before another attempt.')
+    }
     if (this.history.filter(item => activeJob(item.phase)).length >= 20) {
       throw new Error('Activity queue is full')
     }
