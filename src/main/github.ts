@@ -651,7 +651,8 @@ export class GitHubClient {
         (refType === 'branch' && remoteRef.object.type !== 'commit')) {
       throw new Error('GitHub returned an invalid workflow ref object')
     }
-    const base = await this.workflowSource(owner, name, workflowId, signal)
+    const base = await this.workflowSource(owner, name, workflowId, signal,
+      `refs/heads/${validateWorkflowRef(repository.default_branch)}`)
     if (base.workflow.state !== 'active' || base.sourceState !== 'parsed' ||
         !base.fileBlobSha || !base.triggers.some(x => x.event === 'workflow_dispatch')) {
       throw new Error('Workflow is not dispatchable on the default branch')
