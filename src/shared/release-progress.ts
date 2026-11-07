@@ -102,19 +102,19 @@ export function classifyReleaseProgress(
     return { outcome: 'uncertain', recovery: 'inspect-release',
       settled: release !== 'unavailable' }
   }
-  if (target.releaseAction === 'publish' && release === 'draft') {
-    return { outcome: 'uncertain', recovery: 'inspect-release', settled: false }
-  }
   if (release === 'published' || release === 'prerelease') {
     return { outcome: 'published', recovery: 'inspect-release', settled: true }
-  }
-  if (release === 'draft') {
-    return { outcome: 'draft', recovery: 'inspect-release',
-      settled: target.kind === 'api' && target.releaseAction === 'create-draft' }
   }
   if (correlation === 'verified' && run?.status === 'completed' &&
       run.conclusion && run.conclusion !== 'success') {
     return { outcome: 'failed', recovery: 'inspect-actions', settled: true }
+  }
+  if (target.releaseAction === 'publish' && release === 'draft') {
+    return { outcome: 'uncertain', recovery: 'inspect-release', settled: false }
+  }
+  if (release === 'draft') {
+    return { outcome: 'draft', recovery: 'inspect-release',
+      settled: target.kind === 'api' && target.releaseAction === 'create-draft' }
   }
   if (target.kind === 'api') {
     return { outcome: 'uncertain', recovery: 'verify-manually', settled: false }
