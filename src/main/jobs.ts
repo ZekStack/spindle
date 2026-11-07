@@ -425,7 +425,8 @@ export class JobManager {
           ...(pending?.body !== undefined ? { body: pending.body } : {})
         }, controller.signal, pending?.assetPath)
         if (controller.signal.aborted) return
-        this.finish(job, 'completed', null, 'GitHub confirmed the release action. Refresh Releases.')
+        this.line(job, 'GitHub confirmed the release action.', 100)
+        this.finish(job, 'completed', null, 'Refresh Releases to inspect the result.')
       } else if (job.kind === 'local-git-inspection') {
         await this.inspectWorktree(job, controller.signal)
         if (controller.signal.aborted) return
@@ -484,9 +485,11 @@ export class JobManager {
       // GitHub or local Git request fails; never report false full success.
       const hasPartialResult = job.kind === 'repository-inspection'
         ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-      this.finish(job, job.kind === 'local-git-tag' && job.tagRemoteDeleted
-        ? 'partial' : hasPartialResult ? 'partial' : 'failed',
-        job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'tag-partial' : code,
+      this.finish(job, job.kind === 'github-release' && timedOut
+        ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
+          ? 'partial' : hasPartialResult ? 'partial' : 'failed',
+        job.kind === 'github-release' && timedOut ? 'release-uncertain'
+          : job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'tag-partial' : code,
         job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'Origin deletion succeeded; local deletion may remain. Refresh both before continuing.'
           : job.kind === 'local-git-tag'
