@@ -2,6 +2,10 @@ import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { TAG_OID_PATTERN, validateTagName } from '../shared/tags'
 import {
+  validateWorkflowId, validateDispatchRequest, type WorkflowChoice,
+  type WorkflowChoices, type WorkflowDispatchRequest
+} from '../shared/release-strategies'
+import {
   type ReleaseDetails, type ReleaseTagPreview, type ReleaseMutationRequest,
   validateReleaseMutation
 } from '../shared/releases'
@@ -416,6 +420,67 @@ export class GitHubClient {
         break
       }
     }
+  }
+
+  /** Discover workflows from the selected repository, with no known-name catalog. */
+  async workflows(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<WorkflowChoices> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    const items: WorkflowChoice[] = []
+    let truncated = false
+    for (let page = 1; page <= 3; page++) {
+      const response = await this.requestWithMeta<{
+        workflows: Array<{ id: number; name: string; path: string; state: string }>
+      }>(`${prefix}/actions/workflows?per_page=100&page=${page}`, signal)
+      for (const item of response.data.workflows) {
+        if (!Number.isSafeInteger(item.id) || item.id <= 0 ||
+          typeof item.path !== 'string' ||
+          !/^\.github\/workflows\/[a-zA-Z0-9_.-]+\.ya?ml$/.test(item.path)) continue
+        items.push({
+          id: item.id, name: typeof item.name === 'string' ? item.name.slice(0, 120) : item.path,
+          path: item.path, state: typeof item.state === 'string' ? item.state : 'unknown'
+        })
+      }
+      if (!response.hasNext) break
+      if (page === 3) truncated = true
+    }
+    return { items, truncated }
+  }
+
+  /** A configured workflow must still belong to this repository and be active. */
+  async releaseWorkflow(ownerValue: string, nameValue: string, rawId: number,
+    signal?: AbortSignal): Promise<WorkflowChoice> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const id = validateWorkflowId(rawId)
+    const item = await this.request<{
+      id: number; name: string; path: string; state: string
+    }>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/workflows/${id}`, signal)
+    if (item.id !== id || typeof item.path !== 'string' ||
+        !/^\.github\/workflows\/[a-zA-Z0-9_.-]+\.ya?ml$/.test(item.path)) {
+      throw new Error('Configured workflow no longer matches GitHub repository')
+    }
+    if (item.state !== 'active') throw new Error('Configured workflow is not active')
+    return { id, path: item.path,
+      name: typeof item.name === 'string' ? item.name.slice(0, 120) : item.path,
+      state: 'active' }
+  }
+
+  /** Dispatch only a verified existing tag; GitHub accepts, not completes, the workflow. */
+  async dispatchReleaseWorkflow(ownerValue: string, nameValue: string,
+    input: WorkflowDispatchRequest, signal: AbortSignal): Promise<void> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const request = validateDispatchRequest(input)
+    const tag = await this.releaseTag(owner, name, request.tagName, signal)
+    if (tag.tagOid !== request.expectedTagOid) {
+      throw new Error('Release tag changed since confirmation')
+    }
+    await this.releaseWorkflow(owner, name, request.workflowId, signal)
+    await this.releaseRequest(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/workflows/${request.workflowId}/dispatches`,
+      'POST', { ref: request.ref, inputs: request.inputs }, signal)
   }
 
   async workflowRuns(ownerValue: string, nameValue: string, signal?: AbortSignal): Promise<WorkflowRun[]> {
