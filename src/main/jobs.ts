@@ -166,9 +166,11 @@ export class JobManager {
         job.finishedAt = new Date().toISOString()
         job.errorCode = job.kind === 'local-git-tag' ? 'tag-partial' :
           job.kind === 'github-release' ? 'release-uncertain' :
-            job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' :
+            job.kind === 'github-workflow-control' &&
+          (timedOut || error instanceof WorkflowMutationUncertainError) ? 'workflow-uncertain' :
+        job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' :
               job.kind === 'github-workflow-control' ? 'workflow-uncertain' : 'interrupted'
-        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch' && job.kind !== 'github-workflow-control'
+        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch' && job.kind !== 'github-workflow-control' && job.kind !== 'github-workflow-control'
         job.output.push(job.kind === 'github-workflow-control'
           ? 'Workflow action interrupted. Inspect the live run before another action.'
           : job.kind === 'github-workflow-dispatch'
@@ -476,6 +478,54 @@ export class JobManager {
     return copy(record)
   }
 
+  /** Queue a single confirmed Actions mutation, with no reusable input values. */
+  controlWorkflow(ownerValue: string, nameValue: string,
+    raw: WorkflowControlRequest): JobRecord {
+    this.list()
+    const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
+    const request = validateWorkflowControlRequest(raw)
+    if (this.history.some(item => activeJob(item.phase) &&
+      ['github-workflow-control','github-workflow-dispatch','github-release','local-git-tag']
+        .includes(item.kind) &&
+      item.repository.toLowerCase() === repository.toLowerCase())) {
+      throw new Error('A workflow or release mutation is already running for this repository')
+    }
+    // Prevent accidental duplicate submissions from retries, double clicks
+    // or application restarts while GitHub is eventually consistent.
+    if (this.history.some(item => item.kind === 'github-workflow-control' &&
+      item.repository.toLowerCase() === repository.toLowerCase() &&
+      (item.phase === 'completed' || item.phase === 'partial') &&
+      item.workflowControl?.action === request.action &&
+      item.workflowControl.workflowId === request.workflowId &&
+      Date.now() - Date.parse(item.requestedAt) < 2 * 60_000 &&
+      (item.workflowControl.action === 'dispatch' && request.action === 'dispatch'
+        ? item.workflowControl.ref === request.ref &&
+          item.workflowControl.expectedRefOid === request.expectedRefOid
+        : item.workflowControl.action !== 'dispatch' && request.action !== 'dispatch' &&
+          item.workflowControl.runId === request.runId &&
+          item.workflowControl.expectedAttempt === request.expectedAttempt))) {
+      throw new Error('Recent workflow action may have been accepted; inspect Actions before trying again')
+    }
+    if (this.history.filter(item => activeJob(item.phase)).length >= 20) {
+      throw new Error('Activity queue is full')
+    }
+    const { inputs, ...safe } = request.action === 'dispatch'
+      ? request : { ...request, inputs: undefined }
+    const record: JobRecord = {
+      id: randomUUID(), kind: 'github-workflow-control', action: 'workflow-control',
+      repository, workflowControl: safe as JobRecord['workflowControl'],
+      requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
+      phase: 'queued', progress: 0, output: ['GitHub Actions operation queued.'],
+      errorCode: null, retryable: false
+    }
+    if (request.action === 'dispatch') this.pendingWorkflowInputs.set(record.id, request.inputs)
+    this.history.unshift(record)
+    this.history = this.history.slice(0, MAX_HISTORY)
+    this.publish()
+    this.schedule()
+    return copy(record)
+  }
+
   /** Advises the renderer, never authorizes a future write operation. */
   async previewPull(ownerValue: string, nameValue: string): Promise<PullReadiness> {
     this.list()
@@ -499,7 +549,11 @@ export class JobManager {
     this.pendingTagMessages.delete(id)
     this.pendingReleaseContent.delete(id)
     this.pendingDispatchInputs.delete(id)
-    if (job.kind === 'github-workflow-dispatch' && job.phase === 'running') {
+    this.pendingWorkflowInputs.delete(id)
+    if (job.kind === 'github-workflow-control' && job.phase === 'running') {
+      this.finish(job, 'partial', 'workflow-uncertain',
+        'Local request interrupted; verify the Actions run before another action.')
+    } else if (job.kind === 'github-workflow-dispatch' && job.phase === 'running') {
       this.finish(job, 'partial', 'dispatch-uncertain',
         'Dispatch interrupted. Inspect Actions and Releases before retrying.')
     } else if (job.kind === 'github-release' && job.phase === 'running') {
@@ -539,16 +593,31 @@ export class JobManager {
     this.controllers.set(job.id, controller)
     job.startedAt = new Date().toISOString()
     job.phase = 'running'
-    this.line(job, job.kind === 'github-workflow-dispatch' ? 'Validating workflow dispatch.' : job.kind === 'github-release' ? 'Starting GitHub Release action.' : job.kind === 'local-git-inspection'
+    this.line(job, job.kind === 'github-workflow-control' ? 'Verifying GitHub Actions run and permissions.' :
+      job.kind === 'github-workflow-dispatch' ? 'Validating workflow dispatch.' : job.kind === 'github-release' ? 'Starting GitHub Release action.' : job.kind === 'local-git-inspection'
       ? 'Starting local Git inspection.' : isLocal(job.kind)
         ? `Starting Git ${job.action}.` : 'Contacting GitHub for repository inspection.', 5)
     let timedOut = false
     const watchdog = setTimeout(() => {
       timedOut = true
       controller.abort()
-    }, job.kind === 'local-git-clone' ? 600_000 : job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ? 150_000 : isLocal(job.kind) && job.kind !== 'local-git-inspection' ? 300_000 : DEADLINE_MS)
+    }, job.kind === 'local-git-clone' ? 600_000 : job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ? 150_000 :
+      job.kind === 'github-workflow-control' ? 90_000 : isLocal(job.kind) && job.kind !== 'local-git-inspection' ? 300_000 : DEADLINE_MS)
     try {
-      if (job.kind === 'github-workflow-dispatch') {
+      if (job.kind === 'github-workflow-control') {
+        if (!job.workflowControl || !this.github.mutateWorkflowControl) {
+          throw new Error('GitHub workflow controls are unavailable')
+        }
+        const input: WorkflowControlRequest = job.workflowControl.action === 'dispatch'
+          ? { ...job.workflowControl, inputs: this.pendingWorkflowInputs.get(job.id) ?? {} }
+          : job.workflowControl
+        this.line(job, 'Revalidating the selected workflow and run.', 20)
+        await this.github.mutateWorkflowControl(owner, name, input, controller.signal)
+        if (controller.signal.aborted) return
+        this.line(job, 'GitHub accepted the workflow request; remote outcome is not yet known.', 100)
+        this.finish(job, 'completed', null,
+          'Refresh GitHub Actions to verify the actual workflow state.')
+      } else if (job.kind === 'github-workflow-dispatch') {
         if (!job.dispatchOperation || !this.github.dispatchReleaseWorkflow || !this.releaseStrategies) {
           throw new Error('Workflow dispatch unavailable')
         }
@@ -633,6 +702,8 @@ export class JobManager {
           : error.reason === 'output-limit' ? 'output-limit' : 'git-failed'
         : null
       const code = timedOut ? 'timeout'
+        : job.kind === 'github-workflow-control' && error instanceof WorkflowPreflightError &&
+          /changed since confirmation/.test(error.message) ? 'workflow-stale'
         : job.kind === 'github-release' && error instanceof Error &&
             /changed since confirmation|tag changed/i.test(error.message) ? 'release-stale'
         : error instanceof TagLifecycleError ? error.code
@@ -641,12 +712,18 @@ export class JobManager {
       // GitHub or local Git request fails; never report false full success.
       const hasPartialResult = job.kind === 'repository-inspection'
         ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-      this.finish(job, job.kind === 'github-workflow-dispatch' ? 'partial' : job.kind === 'github-release' && timedOut
+      this.finish(job, job.kind === 'github-workflow-control' &&
+        (timedOut || error instanceof WorkflowMutationUncertainError) ? 'partial' :
+        job.kind === 'github-workflow-dispatch' ? 'partial' : job.kind === 'github-release' && timedOut
         ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'partial' : hasPartialResult ? 'partial' : 'failed',
         job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : job.kind === 'github-release' && timedOut ? 'release-uncertain'
           : job.kind === 'local-git-tag' && job.tagRemoteDeleted ? 'tag-partial' : code,
-        job.kind === 'local-git-tag' && job.tagRemoteDeleted
+        job.kind === 'github-workflow-control'
+          ? timedOut || error instanceof WorkflowMutationUncertainError
+            ? 'Workflow request outcome is uncertain; inspect Actions before another action.'
+            : 'Workflow action rejected or stale; refresh GitHub and confirm again.'
+          : job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'Origin deletion succeeded; local deletion may remain. Refresh both before continuing.'
           : job.kind === 'local-git-tag'
             ? 'Tag operation could not finish; refresh local and origin tags before retrying.'
@@ -665,9 +742,12 @@ export class JobManager {
       if (timedOut && activeJob(job.phase)) {
         const partial = job.kind === 'repository-inspection'
           ? job.progress >= 33 : job.kind === 'local-git-inspection' && job.progress >= 60
-        this.finish(job, job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
+        this.finish(job, job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ||
+          job.kind === 'github-workflow-control' ? 'partial' : job.kind === 'local-git-tag' && job.tagRemoteDeleted
           ? 'partial' : partial ? 'partial' : 'failed',
+          job.kind === 'github-workflow-control' ? 'workflow-uncertain' :
           job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : job.kind === 'github-release' ? 'release-uncertain' : job.kind === 'local-git-tag' ? 'tag-partial' : 'timeout',
+          job.kind === 'github-workflow-control' ? 'Workflow action uncertain; refresh Actions.' :
           job.kind === 'github-workflow-dispatch' ? 'Dispatch state uncertain; check Actions.' :
             job.kind === 'github-release' ? 'Release state uncertain; refresh GitHub.' :
             job.kind === 'local-git-tag' ? 'Tag state uncertain; refresh both locations.' : 'Operation timed out.')
@@ -676,6 +756,7 @@ export class JobManager {
       this.pendingTagMessages.delete(job.id)
       this.pendingReleaseContent.delete(job.id)
       this.pendingDispatchInputs.delete(job.id)
+      this.pendingWorkflowInputs.delete(job.id)
       this.schedule()
     }
   }
