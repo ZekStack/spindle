@@ -128,3 +128,15 @@ test('restart marks started workflow request uncertain without resending it', ()
     assert.equal(manager.list()[0].retryable, false)
   } finally { rmSync(folder, { recursive: true, force: true }) }
 })
+
+test('workflow control holds the same-repository mutation lock against draft release creation', () => {
+  const { manager, cleanup } = fixture(async () => {})
+  try {
+    manager.controlWorkflow('TestOrg', 'demo', rerun)
+    assert.throws(() => manager.mutateRelease('TestOrg', 'demo', {
+      action: 'create-draft', tagName: 'v1.0.0',
+      expectedTagOid: SHA, name: 'Draft release', body: ''
+    }), /already running/)
+    assert.throws(() => manager.controlWorkflow('TestOrg', 'demo', rerun), /already running/)
+  } finally { cleanup() }
+})
