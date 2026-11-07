@@ -510,7 +510,9 @@ export class GitHubClient {
       if (error instanceof Error && error.message.includes('not found or inaccessible')) {
         return result
       }
-      if (error instanceof Error && /Workflow source|workflow source|Invalid workflow|Invalid UTF/i.test(error.message)) {
+      if (error instanceof TypeError ||
+        (error instanceof Error &&
+          /Workflow source|workflow source|Invalid workflow|Invalid UTF/i.test(error.message))) {
         result.sourceState = 'invalid'
         return result
       }
