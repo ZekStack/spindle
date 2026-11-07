@@ -88,10 +88,23 @@ export function classifyReleaseProgress(
 ): Pick<ReleaseProgressSnapshot, 'outcome' | 'recovery' | 'settled'> {
   if (target.phase === 'queued') return { outcome: 'queued', recovery: 'none', settled: false }
   if (target.phase === 'running') return { outcome: 'running', recovery: 'none', settled: false }
-  if (target.releaseAction === 'delete-release' && release === 'absent' && tag === 'matched') {
-    return { outcome: 'release-deleted', recovery: 'inspect-tag', settled: true }
-  }
   if (tag === 'changed') return { outcome: 'uncertain', recovery: 'verify-manually', settled: true }
+  if (target.releaseAction === 'delete-release') {
+    if (release === 'absent' && tag === 'matched') {
+      return { outcome: 'release-deleted', recovery: 'inspect-tag', settled: true }
+    }
+    return { outcome: 'uncertain', recovery: 'inspect-release', settled: release !== 'unavailable' }
+  }
+  if (target.releaseAction === 'edit-notes' || target.releaseAction === 'upload-asset') {
+    // A matching Release proves existence, not that free-form notes or a
+    // specific asset upload succeeded. Those values are intentionally not
+    // persisted, so the user must inspect the resulting Release.
+    return { outcome: 'uncertain', recovery: 'inspect-release',
+      settled: release !== 'unavailable' }
+  }
+  if (target.releaseAction === 'publish' && release === 'draft') {
+    return { outcome: 'uncertain', recovery: 'inspect-release', settled: false }
+  }
   if (release === 'published' || release === 'prerelease') {
     return { outcome: 'published', recovery: 'inspect-release', settled: true }
   }
