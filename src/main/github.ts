@@ -497,8 +497,15 @@ export class GitHubClient {
         return result
       }
       const source = decodeWorkflowContent(blob)
-      const parsed = parseWorkflowDefinition(source)
-      return { ...result, ...parsed, sourceState: 'parsed' }
+      try {
+        const parsed = parseWorkflowDefinition(source)
+        return { ...result, ...parsed, sourceState: 'parsed' }
+      } catch {
+        // A syntactically invalid YAML file is not an absent workflow,
+        // and should not expose parser internals or the source to the UI.
+        result.sourceState = 'invalid'
+        return result
+      }
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found or inaccessible')) {
         return result
