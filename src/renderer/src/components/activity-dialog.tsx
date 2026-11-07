@@ -23,6 +23,8 @@ function errorKey(code: JobErrorCode | null, localGit = false): string {
     case 'tag-exists': return 'tagErrorExists'
     case 'tag-missing': return 'tagErrorMissing'
     case 'tag-partial': return 'tagErrorPartial'
+    case 'release-stale': return 'releaseErrorStale'
+    case 'release-uncertain': return 'releaseErrorUncertain'
     case 'checkout-moved': return 'localSafety_checkout-moved'
     case 'origin-mismatch': return 'localSafety_origin-mismatch'
     case 'detached-head': return 'localSafety_detached-head'
@@ -72,7 +74,8 @@ export function ActivityDialog() {
     ? 'activityLocalInspection' : job.kind === 'local-git-clone' ? 'activityClone'
       : job.kind === 'local-git-fetch' ? 'activityFetch'
         : job.kind === 'local-git-pull' ? 'activityPull'
-          : job.kind === 'local-git-tag' ? 'activityTag' : 'activityInspection')
+          : job.kind === 'local-git-tag' ? 'activityTag'
+            : job.kind === 'github-release' ? 'activityRelease' : 'activityInspection')
 
   async function inspectLocal() {
     setBusy(true)
@@ -172,6 +175,13 @@ export function ActivityDialog() {
                       : detail.tagOperation.action === 'delete-origin' ? 'tagsDeleteOrigin'
                         : 'tagsDeleteBoth')}: {detail.tagOperation.tag}
               </p>}
+              {detail.releaseOperation && <p className="mt-2 break-all text-xs text-[var(--muted)]">
+                {t(detail.releaseOperation.action === 'create-draft' ? 'releaseCreateDraft'
+                  : detail.releaseOperation.action === 'edit-notes' ? 'releaseEdit'
+                    : detail.releaseOperation.action === 'publish' ? 'releasePublish'
+                      : detail.releaseOperation.action === 'upload-asset' ? 'releaseUpload'
+                        : 'releaseDelete')}: {detail.releaseOperation.tagName}
+              </p>}
               {detail.tagRemoteDeleted && detail.phase === 'partial' &&
                 <p role="alert" className="mt-2 text-xs text-amber-400">
                   {t('tagErrorPartial')}
@@ -191,7 +201,7 @@ export function ActivityDialog() {
               </p>
               {detail.errorCode && <p role="alert" className="mt-3 text-sm text-red-400">
                 {t(detail.kind === 'local-git-inspection' && detail.errorCode === 'not-found'
-                  ? 'activityGitUnavailable' : errorKey(detail.errorCode, detail.kind !== 'repository-inspection'))}
+                  ? 'activityGitUnavailable' : errorKey(detail.errorCode, detail.kind.startsWith('local-git')))}
               </p>}
               {detail.errorCode && detail.retryable !== undefined &&
                 <p className="mt-2 text-xs text-[var(--muted)]">
