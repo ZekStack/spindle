@@ -9,6 +9,7 @@ import { Busy, Chip, ErrorState, ExternalGitHub } from '../components/common'
 import { readableDate } from '../lib/utils'
 import { RepositoryCheckout } from '../components/local-workspaces'
 import { ReleaseManager } from '../components/release-manager'
+import { WorkflowExplorer } from '../components/workflow-explorer'
 
 type Tab = 'overview' | 'releases' | 'workflows'
 export function RepositoryPage() {
@@ -40,10 +41,6 @@ export function RepositoryPage() {
   const releases = useQuery({
     queryKey: ['releases', owner, name], queryFn: () => window.spindle.listReleases(owner, name),
     enabled: tab === 'releases', refetchInterval: tab === 'releases' ? 60_000 : false
-  })
-  const workflows = useQuery({
-    queryKey: ['runs', owner, name], queryFn: () => window.spindle.listWorkflowRuns(owner, name),
-    enabled: tab === 'workflows', refetchInterval: tab === 'workflows' ? 30_000 : false
   })
   const tabs: { key: Tab; label: string; icon: typeof GitBranch }[] = [
     { key: 'overview', label: t('overview'), icon: GitBranch },
@@ -86,7 +83,11 @@ export function RepositoryPage() {
         <Button variant="secondary" size="sm" onClick={() => {
           void repository.refetch()
           if (tab === 'releases') void releases.refetch()
-          if (tab === 'workflows') void workflows.refetch()
+          if (tab === 'workflows') {
+            void cache.invalidateQueries({ queryKey: ['workflow-catalog', owner, name] })
+            void cache.invalidateQueries({ queryKey: ['workflow-source', owner, name] })
+            void cache.invalidateQueries({ queryKey: ['workflow-runs-page', owner, name] })
+          }
         }}><RefreshCw className="size-3.5"/>{t('refresh')}</Button>
       </div>
     </div>
@@ -116,23 +117,6 @@ export function RepositoryPage() {
     {tab === 'releases' && <ReleaseManager owner={owner} name={name}
       releases={releases.data} pending={releases.isPending}
       error={releases.error} refresh={() => { void releases.refetch() }}/>}
-    {tab === 'workflows' && <div className="panel overflow-hidden">
-      {workflows.isPending ? <div className="p-6"><Busy/></div> : workflows.isError ?
-        <div className="p-5"><ErrorState error={workflows.error} retry={() => void workflows.refetch()}/></div> :
-        !workflows.data.length ? <p className="p-10 text-center text-sm muted">{t('noWorkflows')}</p> :
-        workflows.data.map((run) => <div key={run.id} className="flex items-center gap-4 border-b border-[var(--border)] px-5 py-4 last:border-0">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-[var(--surface-2)] text-orange-500"><Workflow className="size-5"/></div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{run.name}</span>
-              <Chip tone={run.conclusion === 'success' ? 'green' : run.conclusion === 'failure' ? 'red' : 'orange'}>
-                {run.conclusion || run.status}
-              </Chip>
-            </div>
-            <p className="mt-1 text-xs muted">{run.headBranch} · {run.event} · {readableDate(run.createdAt, i18n.language)}</p>
-          </div>
-          <ExternalGitHub url={run.htmlUrl}/>
-        </div>)}
-    </div>}
+    {tab === 'workflows' && <WorkflowExplorer owner={owner} name={name}/>}
   </div>
 }
