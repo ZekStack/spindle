@@ -428,6 +428,31 @@ destructive choice has a confirmation and an auditable result.
 - [ ] **M5.1 — Workflow discovery.** List workflow files, triggers,
       dispatch inputs, recent runs, branches, commits and permissions,
       including pagination and filtering.
+      Engineering work: [x] server-side paginated workflow catalog
+      (50/page), active-state and per-page name/path filters;
+      [x] validate workflow IDs and read the exact workflow YAML file
+      from the repository's default branch through a bounded GitHub
+      Contents request; [x] use the existing locked js-yaml parser
+      rather than a handwritten YAML subset; [x] inspect trigger event
+      names, simple filters, workflow_dispatch input names, required flags,
+      types and choice options; [x] show requested top-level and job-level
+      GITHUB_TOKEN permissions separately from the active account's
+      reported OAuth scopes, with explicit unknown/inherited caveats;
+      [x] per-workflow server-paginated recent runs (30/page) with
+      validated branch/tag, event and status filters, exact head SHA,
+      run number and attempt; [x] preserve unavailable/too-large/
+      invalid source distinctions, rate-limit/access errors, and explicit
+      default-branch source provenance; [x] EN/HU UI, regression tests,
+      and a read-only API surface through sandboxed preload.
+      **Remaining acceptance:** installed Linux/Windows keyboard and
+      responsive UI checks; public/private repository permissions and
+      workflow YAML variants including reusable workflows, skipped or
+      disabled workflows and dynamic configuration; GitHub Actions API
+      pagination/rate-limit behavior under real traffic. The static
+      parser describes declarations but does not infer effective runtime
+      permissions or evaluate expressions. M5.2 adds mutations, M5.3
+      adds live run/job/log views. Do not mark accepted until runtime
+      checks pass.
 - [ ] **M5.2 — Controls.** Dispatch manual workflows, cancel, rerun and
       rerun failed jobs with clear permissions and confirmations.
 - [ ] **M5.3 — Live detail.** Run/job/step state, streaming or bounded
