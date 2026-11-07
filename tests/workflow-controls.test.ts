@@ -84,7 +84,7 @@ test('workflow controls strictly validate union shape and persisted data has no 
   const validated = validateWorkflowControlRequest(dispatch)
   assert.equal(validated.action, 'dispatch')
   if (validated.action !== 'dispatch') throw new Error('Expected dispatch')
-  assert.deepEqual(validated.inputs, dispatch.inputs)
+  assert.deepEqual({ ...validated.inputs }, dispatch.inputs)
   assert.equal(validateWorkflowControlRequest(runAction).action, 'rerun-failed')
   const { inputs, ...safe } = dispatch
   assert.equal(validateStoredWorkflowControl(safe), true)
