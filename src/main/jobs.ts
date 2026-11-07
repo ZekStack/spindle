@@ -20,9 +20,11 @@ import {
   validateDispatchRequest, type WorkflowDispatchRequest
 } from '../shared/release-strategies'
 import type { ReleaseStrategyStore } from './release-strategies'
+import { validateWorkflowId } from '../shared/release-strategies'
+import type { ReleaseProgressTarget, ReleaseProgressSnapshot } from '../shared/release-progress'
 
 type Inspector = Pick<GitHubClient, 'repository' | 'releases' | 'workflowRuns'> &
-  Partial<Pick<GitHubClient, 'mutateRelease' | 'dispatchReleaseWorkflow'>>
+  Partial<Pick<GitHubClient, 'mutateRelease' | 'dispatchReleaseWorkflow' | 'releaseProgress'>>
 type Listener = (jobs: JobRecord[]) => void
 const isLocal = (kind: JobRecord['kind']): boolean => kind !== 'repository-inspection' && kind !== 'github-release' && kind !== 'github-workflow-dispatch'
 const MAX_HISTORY = 100
@@ -105,8 +107,11 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     (job.inspection === undefined ||
       (job.kind === 'local-git-inspection' && validGitInspection(job.inspection))) &&
     (job.kind === 'local-git-tag'
-      ? validStoredTagOperation(job.tagOperation) && typeof job.tagRemoteDeleted === 'boolean'
-      : job.tagOperation === undefined && job.tagRemoteDeleted === undefined) &&
+      ? validStoredTagOperation(job.tagOperation) && typeof job.tagRemoteDeleted === 'boolean' &&
+        (job.releaseWorkflowId === undefined || (job.tagOperation?.action === 'push' &&
+          Number.isSafeInteger(job.releaseWorkflowId) && job.releaseWorkflowId > 0))
+      : job.tagOperation === undefined && job.tagRemoteDeleted === undefined &&
+        job.releaseWorkflowId === undefined) &&
     (job.kind === 'github-release' ? validStoredReleaseOperation(job.releaseOperation)
       : job.releaseOperation === undefined) &&
     (job.kind === 'github-workflow-dispatch'
@@ -303,11 +308,20 @@ export class JobManager {
   }
 
   /** The annotation text is never added to history or streamed to the UI. */
-  mutateTag(ownerValue: string, nameValue: string, raw: TagMutationRequest): JobRecord {
+  mutateTag(ownerValue: string, nameValue: string, raw: TagMutationRequest,
+    releaseWorkflowId?: number): JobRecord {
     this.list()
     const repository = `${validateLogin(ownerValue)}/${validateRepository(nameValue)}`
     if (!this.local) throw new Error('Local workspace storage is not configured')
     const request = validateTagMutation(raw)
+    if (releaseWorkflowId !== undefined) {
+      validateWorkflowId(releaseWorkflowId)
+      if (request.action !== 'push') throw new Error('Only tag pushes can start release workflows')
+      const config = this.releaseStrategies?.get(repository)
+      if (config?.kind !== 'tag-push' || config.workflowId !== releaseWorkflowId) {
+        throw new Error('Release strategy changed; refresh before pushing')
+      }
+    }
     if (this.history.some(item => activeJob(item.phase) &&
       (isLocal(item.kind) || item.kind === 'github-release' ||
         item.kind === 'github-workflow-dispatch') &&
@@ -321,6 +335,7 @@ export class JobManager {
     const record: JobRecord = {
       id: randomUUID(), kind: 'local-git-tag', action: 'tag', repository,
       location: this.local.pathFor(repository), tagOperation: operation, tagRemoteDeleted: false,
+      ...(releaseWorkflowId === undefined ? {} : { releaseWorkflowId }),
       requestedAt: new Date().toISOString(), startedAt: null, finishedAt: null,
       phase: 'queued', progress: 0, output: ['Tag operation queued.'],
       errorCode: null, retryable: false
@@ -331,6 +346,35 @@ export class JobManager {
     this.publish()
     this.schedule()
     return copy(record)
+  }
+
+  /** Read-only evidence for an existing Activity attempt, including after restart. */
+  async releaseProgress(rawId: string): Promise<ReleaseProgressSnapshot> {
+    this.list()
+    const id = validateJobId(rawId)
+    const job = this.history.find(entry => entry.id === id)
+    if (!job) throw new Error('Release Activity entry not found')
+    if (!this.github.releaseProgress) throw new Error('Release progress inspection unavailable')
+    const tagPush = job.kind === 'local-git-tag' && job.tagOperation?.action === 'push'
+    if (!tagPush && job.kind !== 'github-workflow-dispatch' && job.kind !== 'github-release') {
+      throw new Error('Activity entry is not a release attempt')
+    }
+    const target: ReleaseProgressTarget = {
+      jobId: job.id,
+      kind: tagPush ? 'tag-push' : job.kind === 'github-workflow-dispatch' ? 'dispatch' : 'api',
+      releaseAction: job.kind === 'github-release' ? job.releaseOperation?.action ?? null : null,
+      tagName: tagPush ? job.tagOperation!.tag : job.kind === 'github-workflow-dispatch'
+        ? job.dispatchOperation!.tagName : job.releaseOperation!.tagName,
+      expectedTagOid: tagPush ? job.tagOperation!.expectedLocalOid ?? null :
+        job.kind === 'github-workflow-dispatch'
+          ? job.dispatchOperation!.expectedTagOid : job.releaseOperation!.expectedTagOid,
+      workflowId: tagPush ? job.releaseWorkflowId ?? null :
+        job.kind === 'github-workflow-dispatch' ? job.dispatchOperation!.workflowId : null,
+      dispatchRef: job.kind === 'github-workflow-dispatch' ? job.dispatchOperation!.ref : null,
+      startedAt: job.startedAt ?? job.requestedAt, phase: job.phase
+    }
+    const [owner, name] = job.repository.split('/')
+    return this.github.releaseProgress(owner, name, target, AbortSignal.timeout(30_000))
   }
 
   /** Queue remote release mutation without writing notes, title or chosen file path to history. */
@@ -520,6 +564,12 @@ export class JobManager {
               'Linked checkout changed since the tag job was queued.')
           }
           const message = this.pendingTagMessages.get(job.id)
+          if (job.releaseWorkflowId !== undefined) {
+            const config = this.releaseStrategies?.get(job.repository)
+            if (config?.kind !== 'tag-push' || config.workflowId !== job.releaseWorkflowId) {
+              throw new Error('Release strategy changed since tag push was queued')
+            }
+          }
           await mutateGitTag(this.local, job.repository,
             { ...job.tagOperation, ...(message ? { message } : {}) },
             controller.signal, report, () => {
