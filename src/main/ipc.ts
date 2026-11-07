@@ -121,6 +121,7 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:github:search-repos', (query: string, page: number) => github.searchRepositories(query, page))
   handle('spindle:github:repository', (owner: string, name: string) => github.repository(owner, name))
   handle('spindle:github:releases', (owner: string, name: string) => github.releases(owner, name))
+  handle('spindle:github:release-progress', (jobId: string) => jobs.releaseProgress(jobId))
   handle('spindle:github:release-tag', (owner: string, name: string, tag: string) =>
     github.releaseTag(owner, name, tag))
   handle('spindle:github:release-detail', (owner: string, name: string, id: number) =>
@@ -153,7 +154,8 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     const strategy = releaseStrategies.get(`${validateLogin(owner)}/${validateRepository(name)}`)
     if (strategy.kind !== 'tag-push') throw new Error('Release strategy changed; refresh first')
     await github.releaseWorkflow(owner, name, validateWorkflowId(strategy.workflowId))
-    return jobs.mutateTag(owner, name, { action: 'push', tag, expectedLocalOid: oid })
+    return jobs.mutateTag(owner, name, { action: 'push', tag, expectedLocalOid: oid },
+      strategy.workflowId)
   })
   handle('spindle:strategy:dispatch', (owner: string, name: string, request: WorkflowDispatchRequest) =>
     jobs.dispatchRelease(owner, name, request))

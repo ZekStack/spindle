@@ -1,6 +1,7 @@
 import type { PullReadiness } from './git-safety'
 import type { GitTagsSnapshot, TagMutationRequest } from './tags'
 import type { ReleaseDetails, ReleaseMutationRequest, ReleaseTagPreview } from './releases'
+import type { ReleaseProgressSnapshot } from './release-progress'
 import type {
   ReleaseStrategy, WorkflowChoices, WorkflowDispatchRequest
 } from './release-strategies'
@@ -135,6 +136,7 @@ export interface SpindleApi {
   searchRepositories(query: string, page: number): Promise<PageResult<Repository>>
   getRepository(owner: string, name: string): Promise<Repository>
   listReleases(owner: string, name: string): Promise<Release[]>
+  getReleaseProgress(jobId: string): Promise<ReleaseProgressSnapshot>
   previewReleaseTag(owner: string, name: string, tag: string): Promise<ReleaseTagPreview>
   getReleaseDetails(owner: string, name: string, releaseId: number): Promise<ReleaseDetails>
   mutateRelease(owner: string, name: string, request: ReleaseMutationRequest): Promise<JobRecord>

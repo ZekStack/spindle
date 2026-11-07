@@ -42,6 +42,7 @@ const api: SpindleApi = {
   searchRepositories: (query, page) => ipcRenderer.invoke('spindle:github:search-repos', query, page),
   getRepository: (owner, name) => ipcRenderer.invoke('spindle:github:repository', owner, name),
   listReleases: (owner, name) => ipcRenderer.invoke('spindle:github:releases', owner, name),
+  getReleaseProgress: (jobId) => ipcRenderer.invoke('spindle:github:release-progress', jobId),
   previewReleaseTag: (owner, name, tag) =>
     ipcRenderer.invoke('spindle:github:release-tag', owner, name, tag),
   getReleaseDetails: (owner, name, id) =>
