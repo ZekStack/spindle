@@ -392,6 +392,30 @@ Release, and CI-generated release workflow.
       and assets. Handle eventual consistency with bounded polling and
       explicit unknown/failed/timed-out states; recover from partial success
       without duplicate tags/releases.
+      Engineering work: [x] read-only per-attempt inspection from durable
+      Activity history without replaying mutations; [x] snapshot the
+      configured workflow ID at tag-push enqueue and preserve confirmed
+      tag object refs on API, dispatch and tag-push attempts; [x] verify
+      the live origin tag object and peeled commit independently from GitHub
+      Releases; [x] inspect published/prerelease/draft states and bounded
+      asset inventory; [x] correlate tag-push Actions runs by exact workflow,
+      event, tag, commit and request window; [x] treat unique dispatch
+      workflow/ref/time matches only as *candidates* because GitHub does
+      not return a run ID from dispatch; [x] expose ambiguity, missing
+      evidence and inventory truncation rather than guessing; [x] read at
+      most 200 workflow runs, and stop foreground UI polling after 30
+      checks or 10 minutes with backoff and explicit timeout; [x] show
+      EN/HU recovery guidance for existing tags/releases, changed refs,
+      failed runs and uncertain remote outcomes; [x] never automatically
+      retry, recreate or force-push any release operation; [x] test
+      correlation logic, live API shape, incomplete inventory and
+      restart-safe attempt context.
+      **Remaining acceptance:** real tag-push and workflow_dispatch
+      correlation with disposable repositories (including simultaneous
+      workflows), delayed publication, partial network failures, account
+      permissions, installed Linux and Windows UI, and human review of
+      ambiguous-run recovery. M5 later adds full workflow/job/log views.
+      Do not mark the stage accepted until these checks pass.
 
 **Exit gate:** create, publish, inspect and remove a release in a test
 repository using both a tag-driven and direct/manual strategy. Every
