@@ -131,6 +131,35 @@ Git output. Clone/fetch/fast-forward-only pull and Git tag lifecycle actions
 are available with Activity progress. Native OS acceptance for the complete
 workflow is still outstanding.
 
+## Release progress and recovery (M4.4)
+
+The Releases tab includes a read-only progress panel for previously queued
+tag pushes, GitHub API release changes, and workflow dispatches. Select an
+Activity attempt and choose **Inspect / watch**. Spindle queries the live
+remote tag ref, peeled commit, GitHub Release status and assets, and the
+configured workflow's recent Actions runs when possible. Current status
+is always distinguished from a past Activity job's local completion state.
+
+A tag-driven Actions run is considered correlated only when its workflow,
+event, tag, exact commit and time window match. A manually dispatched
+workflow returns only an HTTP 204 acknowledgement, so a matching run may
+be shown as an **unverified candidate**, never as proven causation. If
+several candidates appear, no run is selected. Release publication is
+reported only when an actual Release is observed.
+
+Observation uses bounded, backoff-based foreground polling: up to 30
+checks and at most 10 minutes. A timeout describes the *observation*,
+not proof of remote failure. The panel can be reopened or inspected again,
+including after an application restart; it never retries writes and
+does not require background tasks. It scans at most 200 workflow runs
+and labels incomplete evidence explicitly. A Release and its Git tag
+remain independent resources; review the remote state before repeating
+a failed or interrupted action. No automated retry, force-push, duplicate
+tag or Release creation is performed.
+
+Real disposable-repository and installed Windows/Linux acceptance still
+remain as roadmap gates.
+
 ## Release strategies (M4.3)
 
 Every repository's Releases tab provides a release strategy selector.
