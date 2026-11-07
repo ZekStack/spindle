@@ -74,7 +74,7 @@ const en = {
   wfControlTag: 'Tag',
   wfControlVerify: 'Verify workflow and ref',
   wfControlDispatchUnavailable: 'This workflow is not verified as active and manually dispatchable on the default branch.',
-  wfControlSignIn: 'Sign in to GitHub to use workflow controls.'
+  wfControlSignIn: 'Sign in to GitHub to use workflow controls.',
   wfControlPreviewFailed: 'Unable to verify this workflow, ref or permissions. Refresh GitHub and check the selected ref.',
   wfControlRefSha: 'Verified ref SHA',
   wfControlOmit: 'Not provided',
@@ -599,7 +599,7 @@ const hu: Record<keyof typeof en, string> = {
   wfControlTag: 'Címke',
   wfControlVerify: 'Munkafolyamat és hivatkozás ellenőrzése',
   wfControlDispatchUnavailable: 'Ez a munkafolyamat nem igazoltan aktív vagy nem indítható manuálisan az alapértelmezett ágon.',
-  wfControlSignIn: 'A munkafolyamatok kezeléséhez jelentkezz be a GitHubba.'
+  wfControlSignIn: 'A munkafolyamatok kezeléséhez jelentkezz be a GitHubba.',
   wfControlPreviewFailed: 'A munkafolyamat, a hivatkozás vagy a jogosultság nem ellenőrizhető. Frissítsd a GitHub-adatokat.',
   wfControlRefSha: 'Ellenőrzött hivatkozás SHA',
   wfControlOmit: 'Nincs megadva',
