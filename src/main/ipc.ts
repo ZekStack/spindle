@@ -9,6 +9,7 @@ import { LocalWorkspaceStore } from './local-workspaces'
 import { ReleaseStrategyStore } from './release-strategies'
 import { JobManager } from './jobs'
 import type { TagMutationRequest } from '../shared/tags'
+import type { WorkflowControlRequest, WorkflowRefType } from '../shared/workflow-controls'
 import type { ReleaseMutationRequest } from '../shared/releases'
 import {
   validateReleaseStrategy, validateWorkflowId, type ReleaseStrategy,
@@ -164,6 +165,11 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
     github.workflowCatalog(owner, name, page))
   handle('spindle:workflows:source', (owner: string, name: string, workflowId: number) =>
     github.workflowSource(owner, name, workflowId))
+  handle('spindle:workflows:dispatch-preview', (owner: string, name: string,
+    workflowId: number, ref: string, refType: WorkflowRefType) =>
+    github.previewWorkflowDispatch(owner, name, workflowId, ref, refType))
+  handle('spindle:workflows:control', (owner: string, name: string,
+    request: WorkflowControlRequest) => jobs.controlWorkflow(owner, name, request))
   handle('spindle:workflows:runs', (owner: string, name: string, workflowId: number,
     filter: import('../shared/workflow-discovery').WorkflowRunsFilter) =>
     github.workflowRunPage(owner, name, workflowId, filter))
