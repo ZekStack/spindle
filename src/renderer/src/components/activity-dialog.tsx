@@ -26,6 +26,8 @@ function errorKey(code: JobErrorCode | null, localGit = false): string {
     case 'release-stale': return 'releaseErrorStale'
     case 'release-uncertain': return 'releaseErrorUncertain'
     case 'dispatch-uncertain': return 'dispatchErrorUncertain'
+    case 'workflow-uncertain': return 'wfControlUncertain'
+    case 'workflow-stale': return 'wfControlStale'
     case 'checkout-moved': return 'localSafety_checkout-moved'
     case 'origin-mismatch': return 'localSafety_origin-mismatch'
     case 'detached-head': return 'localSafety_detached-head'
@@ -77,7 +79,8 @@ export function ActivityDialog() {
         : job.kind === 'local-git-pull' ? 'activityPull'
           : job.kind === 'local-git-tag' ? 'activityTag'
             : job.kind === 'github-release' ? 'activityRelease'
-              : job.kind === 'github-workflow-dispatch' ? 'activityDispatch' : 'activityInspection')
+              : job.kind === 'github-workflow-dispatch' ? 'activityDispatch' :
+                job.kind === 'github-workflow-control' ? 'wfControlActivity' : 'activityInspection')
 
   async function inspectLocal() {
     setBusy(true)
@@ -188,6 +191,16 @@ export function ActivityDialog() {
                 <p>{t('strategyWorkflow')}: {detail.dispatchOperation.workflowId}</p>
                 <p>{t('strategyTag')}: {detail.dispatchOperation.tagName}</p>
                 <p>{t('strategyDispatchRef')}: {detail.dispatchOperation.ref}</p>
+              </div>}
+              {detail.workflowControl && <div className="mt-2 space-y-1 break-all text-xs text-[var(--muted)]">
+                <p>{t('wfControlActivity')}: {t(detail.workflowControl.action === 'dispatch'
+                  ? 'wfControlConfirmDispatch' : detail.workflowControl.action === 'cancel'
+                    ? 'wfControlCancel' : detail.workflowControl.action === 'rerun'
+                      ? 'wfControlRerun' : 'wfControlRerunFailed')}</p>
+                <p>{t('strategyWorkflow')}: {detail.workflowControl.workflowId}</p>
+                {detail.workflowControl.action === 'dispatch'
+                  ? <p>{detail.workflowControl.refType}: {detail.workflowControl.ref}</p>
+                  : <p>#{detail.workflowControl.runId} · {t('wfAttempt')} {detail.workflowControl.expectedAttempt}</p>}
               </div>}
               {detail.tagRemoteDeleted && detail.phase === 'partial' &&
                 <p role="alert" className="mt-2 text-xs text-amber-400">

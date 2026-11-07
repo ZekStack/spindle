@@ -455,6 +455,34 @@ destructive choice has a confirmation and an auditable result.
       checks pass.
 - [ ] **M5.2 — Controls.** Dispatch manual workflows, cancel, rerun and
       rerun failed jobs with clear permissions and confirmations.
+      Engineering work: [x] safe typed dispatch/cancel/rerun/rerun-failed
+      IPC and main-process GitHub API execution; [x] two-step manual
+      dispatch preview plus explicit confirmation of repository, workflow,
+      branch/tag type and exact Git object SHA; [x] require the workflow
+      to be active and declare workflow_dispatch on the default branch
+      and selected ref, with validated, bounded YAML-declared inputs;
+      [x] revalidate the default and selected workflow file blob SHAs
+      immediately before dispatch, without interpreting expressions;
+      [x] verify the exact run ID, workflow ID, commit SHA, run attempt,
+      status and conclusion before run mutations; [x] distinguish
+      cancellation from local job cancellation, and permit rerun or
+      rerun-failed only on eligible terminal attempts; [x] require
+      authenticated GitHub access, check explicitly absent repository
+      push rights when reported, and let GitHub enforce actual Actions
+      write permission; [x] preserve no input values or credentials
+      in Activity, retain only safe operation metadata and auditable
+      accepted/failed/uncertain results; [x] suppress accidental duplicate
+      actions during the short eventual-consistency window; [x] never
+      auto-retry remote requests, treating transport interruption and
+      timeout as uncertain; [x] add bilingual confirmations and tests.
+      **Remaining acceptance:** on installed Linux and Windows, test
+      real Actions write permissions with OAuth, fine-grained tokens,
+      organization restrictions and private repositories; test branch/tag
+      name collisions, live ref/source changes and duplicate dispatch
+      handling on disposable repos; verify real cancel/rerun/rerun-failed
+      eligibility, remote eventual consistency and interrupted requests.
+      An HTTP 201/202/204 response acknowledges a request, not completion.
+      Do not mark accepted until these tests pass.
 - [ ] **M5.3 — Live detail.** Run/job/step state, streaming or bounded
       log refresh, failures, artifacts and downloads; show polling backoff
       and GitHub rate-limit feedback.

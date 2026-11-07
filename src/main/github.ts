@@ -6,6 +6,11 @@ import {
   type WorkflowSource, type WorkflowRunsFilter, type WorkflowRunsPage
 } from '../shared/workflow-discovery'
 import { TAG_OID_PATTERN, validateTagName } from '../shared/tags'
+import { validateWorkflowRef } from '../shared/release-strategies'
+import {
+  validateWorkflowControlRequest, workflowActionAllowed, validateDeclaredInputs,
+  type WorkflowControlRequest, type WorkflowDispatchPreview, type WorkflowRefType
+} from '../shared/workflow-controls'
 import {
   validateWorkflowId, validateDispatchRequest, type WorkflowChoice,
   type WorkflowChoices, type WorkflowDispatchRequest
@@ -33,6 +38,11 @@ const execFileAsync = promisify(execFile)
 const BASE = 'https://api.github.com'
 type RequestFn = typeof fetch
 type Credentials = { token?: string; method: AuthStatus['method'] }
+
+export class WorkflowPreflightError extends Error {}
+export class WorkflowMutationUncertainError extends Error {
+  constructor() { super('Workflow request outcome is uncertain; refresh Actions before retrying') }
+}
 
 export class GitHubCredentials {
   private cache: { value: Credentials; until: number } | null = null
@@ -463,7 +473,7 @@ export class GitHubClient {
 
   /** Inspect source in the repository's current default branch; do not guess workflow triggers. */
   async workflowSource(ownerValue: string, nameValue: string,
-    rawId: number, signal?: AbortSignal): Promise<WorkflowSource> {
+    rawId: number, signal?: AbortSignal, sourceRef?: string): Promise<WorkflowSource> {
     const owner = validateLogin(ownerValue)
     const name = validateRepository(nameValue)
     const id = validateWorkflowId(rawId)
@@ -476,11 +486,17 @@ export class GitHubClient {
       throw new Error('GitHub returned an invalid workflow definition')
     }
     const repo = await this.repository(owner, name, signal)
+    const fileRef = sourceRef === undefined ? repo.defaultBranch : sourceRef
+    if (sourceRef !== undefined) {
+      const m = /^(refs\/heads\/|refs\/tags\/)(.+)$/.exec(sourceRef)
+      if (!m) throw new Error('Invalid workflow source reference')
+      validateWorkflowRef(m[2])
+    }
     const result: WorkflowSource = {
       workflow: { id, name: typeof remote.name === 'string' ?
         remote.name.slice(0, 120) : remote.path, path: remote.path,
         state: typeof remote.state === 'string' ? remote.state.slice(0, 80) : 'unknown' },
-      branch: repo.defaultBranch, fileBlobSha: null,
+      branch: fileRef, fileBlobSha: null,
       sourceState: 'unavailable', triggers: [], dispatchInputs: [],
       permissions: { mode: 'unspecified', entries: [] }, jobPermissions: []
     }
@@ -488,7 +504,7 @@ export class GitHubClient {
       const blob = await this.request<{
         type: string; path: string; sha: string;
         size: number; encoding: string; content: string
-      }>(`${prefix}/contents/${remote.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(repo.defaultBranch)}`, signal)
+      }>(`${prefix}/contents/${remote.path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(fileRef)}`, signal)
       if (blob.type !== 'file' || blob.path !== remote.path ||
         !TAG_OID_PATTERN.test(blob.sha)) throw new Error('Invalid workflow source')
       result.fileBlobSha = blob.sha
@@ -605,6 +621,136 @@ export class GitHubClient {
     return { id, path: item.path,
       name: typeof item.name === 'string' ? item.name.slice(0, 120) : item.path,
       state: 'active' }
+  }
+
+  /**
+   * A read-only explicit preflight: no assumed ref, source or permissions.
+   * Workflows must declare workflow_dispatch on the default branch AND
+   * selected branch/tag. Source blobs are used as optimistic preconditions.
+   */
+  async previewWorkflowDispatch(ownerValue: string, nameValue: string,
+    rawId: number, refValue: string, refType: WorkflowRefType,
+    signal?: AbortSignal): Promise<WorkflowDispatchPreview> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const workflowId = validateWorkflowId(rawId)
+    const ref = validateWorkflowRef(refValue)
+    if (refType !== 'branch' && refType !== 'tag') throw new Error('Invalid workflow ref type')
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    const repository = await this.request<{
+      default_branch: string; permissions?: { push?: boolean }
+    }>(prefix, signal)
+    if (repository.permissions?.push === false) {
+      throw new Error('GitHub reports no write access to this repository')
+    }
+    const remoteRef = await this.request<{
+      object: { sha: string; type: string }
+    }>(`${prefix}/git/ref/${refType === 'branch' ? 'heads' : 'tags'}/${ref.split('/').map(encodeURIComponent).join('/')}`, signal)
+    if (!TAG_OID_PATTERN.test(remoteRef.object.sha) ||
+        !['commit', 'tag'].includes(remoteRef.object.type) ||
+        (refType === 'branch' && remoteRef.object.type !== 'commit')) {
+      throw new Error('GitHub returned an invalid workflow ref object')
+    }
+    const base = await this.workflowSource(owner, name, workflowId, signal,
+      `refs/heads/${validateWorkflowRef(repository.default_branch)}`)
+    if (base.workflow.state !== 'active' || base.sourceState !== 'parsed' ||
+        !base.fileBlobSha || !base.triggers.some(x => x.event === 'workflow_dispatch')) {
+      throw new Error('Workflow is not dispatchable on the default branch')
+    }
+    const target = refType === 'branch' && ref === repository.default_branch ? base
+      : await this.workflowSource(owner, name, workflowId, signal,
+        `refs/${refType === 'branch' ? 'heads' : 'tags'}/${ref}`)
+    if (target.sourceState !== 'parsed' || !target.fileBlobSha ||
+        !target.triggers.some(x => x.event === 'workflow_dispatch')) {
+      throw new Error('Workflow is not dispatchable at the selected ref')
+    }
+    return {
+      workflowId, workflowName: base.workflow.name, ref, refType,
+      refOid: remoteRef.object.sha, defaultBlobSha: base.fileBlobSha,
+      sourceBlobSha: target.fileBlobSha, defaultBranch: repository.default_branch,
+      inputs: target.dispatchInputs
+    }
+  }
+
+  /**
+   * Mutations always refetch GitHub evidence at execution time. An HTTP
+   * acknowledgment only establishes request acceptance, not run completion.
+   * Never automatically retry a POST after an ambiguous network failure.
+   */
+  async mutateWorkflowControl(ownerValue: string, nameValue: string,
+    raw: WorkflowControlRequest, signal: AbortSignal): Promise<void> {
+    const owner = validateLogin(ownerValue)
+    const name = validateRepository(nameValue)
+    const request = validateWorkflowControlRequest(raw)
+    const prefix = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`
+    let path: string
+    let payload: Record<string, unknown> | null = null
+    let acceptedStatus: number
+    if (request.action === 'dispatch') {
+      const current = await this.previewWorkflowDispatch(owner, name,
+        request.workflowId, request.ref, request.refType, signal)
+      if (current.refOid !== request.expectedRefOid ||
+          current.sourceBlobSha !== request.expectedSourceBlobSha ||
+          current.defaultBlobSha !== request.expectedDefaultBlobSha) {
+        throw new WorkflowPreflightError('Workflow source or ref changed since confirmation')
+      }
+      validateDeclaredInputs(request.inputs, current.inputs)
+      path = `${prefix}/actions/workflows/${request.workflowId}/dispatches`
+      payload = { ref: current.ref, inputs: request.inputs }
+      acceptedStatus = 204
+    } else {
+      const run = await this.request<{
+        id: number; workflow_id: number; head_sha: string;
+        run_attempt: number; status: string; conclusion: string | null
+      }>(`${prefix}/actions/runs/${request.runId}`, signal)
+      if (run.id !== request.runId || run.workflow_id !== request.workflowId ||
+        run.head_sha !== request.expectedHeadSha ||
+        run.run_attempt !== request.expectedAttempt ||
+        run.status !== request.expectedStatus ||
+        run.conclusion !== request.expectedConclusion) {
+        throw new WorkflowPreflightError('Workflow run changed since confirmation')
+      }
+      if (!workflowActionAllowed(request.action, run.status, run.conclusion)) {
+        throw new WorkflowPreflightError('Workflow run is not eligible for this action')
+      }
+      // A stale or moved workflow ID must not be used through a saved row.
+      const current = await this.request<{ id: number; state: string }>(
+        `${prefix}/actions/workflows/${request.workflowId}`, signal)
+      if (current.id !== request.workflowId) {
+        throw new WorkflowPreflightError('Workflow no longer belongs to this repository')
+      }
+      path = `${prefix}/actions/runs/${request.runId}/${request.action === 'cancel'
+        ? 'cancel' : request.action === 'rerun' ? 'rerun' : 'rerun-failed-jobs'}`
+      acceptedStatus = request.action === 'cancel' ? 202 : 201
+    }
+    const { token } = await this.credentials.get()
+    if (!token) throw new WorkflowPreflightError('GitHub authentication is required for workflow controls')
+    if (signal.aborted) throw new WorkflowPreflightError('Workflow action was cancelled before submission')
+    let response: Response
+    try {
+      response = await this.requestFn(BASE + path, {
+        method: 'POST',
+        signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Spindle-Desktop', Authorization: `Bearer ${token}`,
+          ...(payload ? { 'Content-Type': 'application/json' } : {})
+        },
+        ...(payload ? { body: JSON.stringify(payload) } : {})
+      })
+    } catch {
+      throw new WorkflowMutationUncertainError()
+    }
+    if (response.status === acceptedStatus) return
+    if ([401, 403, 404, 409, 422, 429].includes(response.status)) {
+      throw new WorkflowPreflightError(response.status === 401
+        ? 'GitHub authentication expired or invalid'
+        : response.status === 403 ? 'GitHub denied permission for this workflow action'
+          : response.status === 429 ? 'GitHub rate limit reached'
+            : 'GitHub rejected this workflow action; refresh live state')
+    }
+    throw new WorkflowMutationUncertainError()
   }
 
   /** Dispatch only a verified existing tag; GitHub accepts, not completes, the workflow. */
