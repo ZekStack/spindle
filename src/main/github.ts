@@ -488,7 +488,7 @@ export class GitHubClient {
     const repo = await this.repository(owner, name, signal)
     const fileRef = sourceRef === undefined ? repo.defaultBranch : sourceRef
     if (sourceRef !== undefined) {
-      const m = /^(refs\\/heads\\/|refs\\/tags\\/)(.+)$/.exec(sourceRef)
+      const m = /^(refs\/heads\/|refs\/tags\/)(.+)$/.exec(sourceRef)
       if (!m) throw new Error('Invalid workflow source reference')
       validateWorkflowRef(m[2])
     }
