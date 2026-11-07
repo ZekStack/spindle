@@ -3,14 +3,15 @@ import type { GitSafetyCode } from './git-safety'
 import type { TagMutationRequest } from './tags'
 import type { SafeReleaseMutation } from './releases'
 import type { StoredDispatchRequest } from './release-strategies'
+import type { StoredWorkflowControl } from './workflow-controls'
 
 /** Safe, serializable operation data. No token, request header or raw command output. */
 export type JobKind = 'repository-inspection' | 'local-git-inspection' |
-  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag' | 'github-release' | 'github-workflow-dispatch'
+  'local-git-clone' | 'local-git-fetch' | 'local-git-pull' | 'local-git-tag' | 'github-release' | 'github-workflow-dispatch' | 'github-workflow-control'
 export type JobPhase = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted'
 export type JobErrorCode = GitSafetyCode | 'forbidden' | 'not-found' | 'rate-limit' |
   'timeout' | 'interrupted' | 'git-unavailable' | 'git-failed' | 'output-limit' |
-  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'release-stale' | 'release-uncertain' | 'dispatch-uncertain' | 'unknown'
+  'tag-stale' | 'tag-exists' | 'tag-missing' | 'tag-partial' | 'release-stale' | 'release-uncertain' | 'dispatch-uncertain' | 'workflow-stale' | 'workflow-uncertain' | 'unknown'
 
 export interface JobRecord {
   id: string
@@ -32,7 +33,9 @@ export interface JobRecord {
   releaseOperation?: SafeReleaseMutation
   /** Workflows, refs and tag SHA are safe; dispatch inputs must remain transient. */
   dispatchOperation?: StoredDispatchRequest
-  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag' | 'release' | 'dispatch'
+  /** Auditable workflow metadata only. Dispatch input values never persist. */
+  workflowControl?: StoredWorkflowControl
+  action: 'inspect' | 'clone' | 'fetch' | 'pull' | 'tag' | 'release' | 'dispatch' | 'workflow-control'
   requestedAt: string
   startedAt: string | null
   finishedAt: string | null

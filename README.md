@@ -131,6 +131,34 @@ Git output. Clone/fetch/fast-forward-only pull and Git tag lifecycle actions
 are available with Activity progress. Native OS acceptance for the complete
 workflow is still outstanding.
 
+## GitHub Actions workflow controls (M5.2)
+
+The **Workflows** tab supports guarded manual `workflow_dispatch` and
+per-run **Cancel**, **Rerun all jobs** and **Rerun failed jobs** actions.
+For dispatch, choose an exact branch or tag, verify the workflow definition
+and its Git SHA, supply the inputs declared by that workflow, then confirm
+the selected repository, workflow and ref. Input values are kept only in
+transient memory and never persisted in Activity; use GitHub Actions Secrets
+rather than dispatch inputs for sensitive credentials.
+
+For an existing run, Spindle asks for an explicit confirmation showing
+the run number, attempt, commit SHA and current state. The main process
+refetches the run immediately before submission; an attempt that has
+changed or become ineligible is rejected rather than silently retargeted.
+Actions write permission is required: reported OAuth scopes and repository
+push rights cannot prove effective Actions permissions. GitHub's API
+enforces the final gate, and API denials are never bypassed.
+
+All operations create auditable Activity entries containing only safe
+IDs and Git SHA metadata. A confirmed POST means **GitHub accepted the
+request**, not that the remote workflow finished. Network interruption
+after submission is reported as **uncertain**; Spindle never retries
+a remote mutation automatically. Refresh the live Actions view to
+reconcile the result before another manual attempt.
+
+Installed Linux/Windows and disposable public/private repository
+acceptance remains open in the roadmap.
+
 ## GitHub Actions workflow discovery (M5.1)
 
 The **Workflows** tab lists workflow files using GitHub's server-paginated
