@@ -10,7 +10,11 @@ import { inspectGitCheckout } from './git-inspection'
 import { validGitInspection } from '../shared/git-inspection'
 import type { LocalWorkspaceStore } from './local-workspaces'
 import { activeJob, validateJobId, type JobErrorCode, type JobRecord } from '../shared/jobs'
-import type { GitHubClient } from './github'
+import { WorkflowMutationUncertainError, WorkflowPreflightError, type GitHubClient } from './github'
+import {
+  validateWorkflowControlRequest, validateStoredWorkflowControl,
+  type WorkflowControlRequest
+} from '../shared/workflow-controls'
 import { listGitTags, mutateGitTag, TagLifecycleError } from './git-tags'
 import { validateTagMutation, type GitTagsSnapshot, type TagMutationRequest } from '../shared/tags'
 import {
@@ -24,9 +28,11 @@ import { validateWorkflowId } from '../shared/release-strategies'
 import type { ReleaseProgressTarget, ReleaseProgressSnapshot } from '../shared/release-progress'
 
 type Inspector = Pick<GitHubClient, 'repository' | 'releases' | 'workflowRuns'> &
-  Partial<Pick<GitHubClient, 'mutateRelease' | 'dispatchReleaseWorkflow' | 'releaseProgress'>>
+  Partial<Pick<GitHubClient, 'mutateRelease' | 'dispatchReleaseWorkflow' | 'releaseProgress' | 'mutateWorkflowControl'>>
 type Listener = (jobs: JobRecord[]) => void
-const isLocal = (kind: JobRecord['kind']): boolean => kind !== 'repository-inspection' && kind !== 'github-release' && kind !== 'github-workflow-dispatch'
+const isLocal = (kind: JobRecord['kind']): boolean =>
+  kind !== 'repository-inspection' && kind !== 'github-release' &&
+  kind !== 'github-workflow-dispatch' && kind !== 'github-workflow-control'
 const MAX_HISTORY = 100
 const MAX_RUNNING = 2
 const DEADLINE_MS = 45_000
@@ -36,6 +42,7 @@ function copy(job: JobRecord): JobRecord {
     ...(job.tagOperation ? { tagOperation: { ...job.tagOperation } } : {}),
     ...(job.releaseOperation ? { releaseOperation: { ...job.releaseOperation } } : {}),
     ...(job.dispatchOperation ? { dispatchOperation: { ...job.dispatchOperation } } : {}),
+    ...(job.workflowControl ? { workflowControl: { ...job.workflowControl } } : {}),
     ...(job.inspection ? { inspection: { ...job.inspection,
       localTags: { ...job.inspection.localTags, names: [...job.inspection.localTags.names] },
       remoteTags: { ...job.inspection.remoteTags, names: [...job.inspection.remoteTags.names] }
@@ -82,12 +89,14 @@ function validHistory(raw: unknown): raw is JobRecord[] {
   return Array.isArray(raw) && raw.length <= MAX_HISTORY && raw.every((job) =>
     job && typeof job === 'object' && typeof job.id === 'string' &&
     typeof job.repository === 'string' && job.repository.length <= 220 &&
-    (job.kind === 'repository-inspection' || job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ||
+    (job.kind === 'repository-inspection' || job.kind === 'github-release' ||
+      job.kind === 'github-workflow-dispatch' || job.kind === 'github-workflow-control' ||
       (['local-git-inspection', 'local-git-clone', 'local-git-fetch', 'local-git-pull', 'local-git-tag'].includes(job.kind) &&
         typeof job.location === 'string' &&
         job.location.length > 0 && job.location.length <= 2048 &&
         isAbsolute(job.location) && !job.location.includes('\0'))) &&
-    job.action === (job.kind === 'github-workflow-dispatch' ? 'dispatch' : job.kind === 'github-release' ? 'release' : job.kind === 'local-git-tag' ? 'tag' : job.kind === 'local-git-clone' ? 'clone'
+    job.action === (job.kind === 'github-workflow-control' ? 'workflow-control' :
+      job.kind === 'github-workflow-dispatch' ? 'dispatch' : job.kind === 'github-release' ? 'release' : job.kind === 'local-git-tag' ? 'tag' : job.kind === 'local-git-clone' ? 'clone'
       : job.kind === 'local-git-fetch' ? 'fetch'
         : job.kind === 'local-git-pull' ? 'pull' : 'inspect') &&
     ['queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'].includes(job.phase) &&
@@ -99,7 +108,8 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     job.output.every((line: unknown) => typeof line === 'string' && line.length <= 160) &&
     (job.errorCode === null || ['auth', 'forbidden', 'not-found', 'rate-limit',
       'network', 'timeout', 'interrupted', 'git-unavailable', 'git-failed',
-      'output-limit', 'unknown', 'tag-stale', 'tag-exists', 'tag-missing', 'tag-partial', 'release-stale', 'release-uncertain', 'dispatch-uncertain', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
+      'output-limit', 'unknown', 'tag-stale', 'tag-exists', 'tag-missing', 'tag-partial', 'release-stale', 'release-uncertain', 'dispatch-uncertain',
+      'workflow-stale', 'workflow-uncertain', ...GIT_SAFETY_CODES].includes(job.errorCode)) &&
     (job.retryable === undefined || typeof job.retryable === 'boolean') &&
     (job.linkedRepository === undefined ||
       (job.kind === 'local-git-inspection' && typeof job.linkedRepository === 'string' &&
@@ -115,7 +125,10 @@ function validHistory(raw: unknown): raw is JobRecord[] {
     (job.kind === 'github-release' ? validStoredReleaseOperation(job.releaseOperation)
       : job.releaseOperation === undefined) &&
     (job.kind === 'github-workflow-dispatch'
-      ? validStoredDispatch(job.dispatchOperation) : job.dispatchOperation === undefined))
+      ? validStoredDispatch(job.dispatchOperation) : job.dispatchOperation === undefined) &&
+    (job.kind === 'github-workflow-control'
+      ? validateStoredWorkflowControl(job.workflowControl)
+      : job.workflowControl === undefined))
 }
 
 /**
@@ -133,6 +146,7 @@ export class JobManager {
   private readonly pendingTagMessages = new Map<string, string>()
   private readonly pendingReleaseContent = new Map<string, { name?: string; body?: string; assetPath?: string }>()
   private readonly pendingDispatchInputs = new Map<string, Record<string, string>>()
+  private readonly pendingWorkflowInputs = new Map<string, Record<string, string>>()
 
   constructor(private readonly file: string, private readonly github: Inspector,
     private readonly local?: LocalWorkspaceStore,
@@ -147,13 +161,17 @@ export class JobManager {
       for (const job of this.history) {
         if (!activeJob(job.phase)) continue
         job.phase = (job.kind === 'local-git-tag' && job.tagRemoteDeleted) ||
-          ((job.kind === 'github-release' || job.kind === 'github-workflow-dispatch') && job.startedAt !== null) ? 'partial' : 'interrupted'
+          ((job.kind === 'github-release' || job.kind === 'github-workflow-dispatch' ||
+            job.kind === 'github-workflow-control') && job.startedAt !== null) ? 'partial' : 'interrupted'
         job.finishedAt = new Date().toISOString()
         job.errorCode = job.kind === 'local-git-tag' ? 'tag-partial' :
           job.kind === 'github-release' ? 'release-uncertain' :
-            job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' : 'interrupted'
-        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch'
-        job.output.push(job.kind === 'github-workflow-dispatch'
+            job.kind === 'github-workflow-dispatch' ? 'dispatch-uncertain' :
+              job.kind === 'github-workflow-control' ? 'workflow-uncertain' : 'interrupted'
+        job.retryable = job.kind !== 'local-git-clone' && job.kind !== 'local-git-tag' && job.kind !== 'github-release' && job.kind !== 'github-workflow-dispatch' && job.kind !== 'github-workflow-control'
+        job.output.push(job.kind === 'github-workflow-control'
+          ? 'Workflow action interrupted. Inspect the live run before another action.'
+          : job.kind === 'github-workflow-dispatch'
           ? 'Interrupted workflow dispatch. Check Actions before dispatching again.'
           : job.kind === 'github-release'
           ? 'Release action interrupted; verify live GitHub state before another action.'
