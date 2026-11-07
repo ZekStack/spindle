@@ -8,6 +8,7 @@ import { WorkspaceStore } from './store'
 import { LocalWorkspaceStore } from './local-workspaces'
 import { JobManager } from './jobs'
 import type { TagMutationRequest } from '../shared/tags'
+import type { ReleaseMutationRequest } from '../shared/releases'
 import { UpdateManager } from './updater'
 import { parseGitHubUrl, validateLogin, validateRepository } from '../shared/contracts'
 
@@ -115,6 +116,22 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:github:search-repos', (query: string, page: number) => github.searchRepositories(query, page))
   handle('spindle:github:repository', (owner: string, name: string) => github.repository(owner, name))
   handle('spindle:github:releases', (owner: string, name: string) => github.releases(owner, name))
+  handle('spindle:github:release-tag', (owner: string, name: string, tag: string) =>
+    github.releaseTag(owner, name, tag))
+  handle('spindle:github:release-detail', (owner: string, name: string, id: number) =>
+    github.releaseDetails(owner, name, id))
+  handle('spindle:github:release-action', (owner: string, name: string, request: ReleaseMutationRequest) =>
+    jobs.mutateRelease(owner, name, request))
+  handle('spindle:github:release-pick-asset', async (owner: string, name: string,
+    request: ReleaseMutationRequest) => {
+    // File bytes and paths never cross the renderer boundary.
+    if (request?.action !== 'upload-asset') throw new Error('Invalid asset action')
+    const selected = await dialog.showOpenDialog(window, {
+      title: 'Select release asset', properties: ['openFile']
+    })
+    return selected.canceled || selected.filePaths.length !== 1
+      ? null : jobs.mutateRelease(owner, name, request, selected.filePaths[0])
+  })
   handle('spindle:github:runs', (owner: string, name: string) => github.workflowRuns(owner, name))
   handle('spindle:auth:status', () => github.authStatus())
   handle('spindle:auth:identity', (refresh: boolean = false) => github.identity(refresh === true))
