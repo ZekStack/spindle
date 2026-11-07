@@ -445,7 +445,7 @@ export class GitHubClient {
     const items: WorkflowChoice[] = result.data.workflows
       .filter(entry => Number.isSafeInteger(entry.id) && entry.id > 0 &&
         typeof entry.path === 'string' &&
-        /^\\.github\\/workflows\\/[a-zA-Z0-9_.-]+\\.ya?ml$/.test(entry.path))
+        /^\.github\/workflows\/[a-zA-Z0-9_.-]+\.ya?ml$/.test(entry.path))
       .map(entry => ({
         id: entry.id, name: typeof entry.name === 'string' ?
           entry.name.slice(0, 120) : entry.path,
@@ -472,7 +472,7 @@ export class GitHubClient {
       id: number; name: string; path: string; state: string
     }>(`${prefix}/actions/workflows/${id}`, signal)
     if (remote.id !== id || typeof remote.path !== 'string' ||
-      !/^\\.github\\/workflows\\/[a-zA-Z0-9_.-]+\\.ya?ml$/.test(remote.path)) {
+      !/^\.github\/workflows\/[a-zA-Z0-9_.-]+\.ya?ml$/.test(remote.path)) {
       throw new Error('GitHub returned an invalid workflow definition')
     }
     const repo = await this.repository(owner, name, signal)
