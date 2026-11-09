@@ -3,6 +3,7 @@ import { Shell } from './shell'
 import { HomePage } from './views/home'
 import { OrganizationPage } from './views/organization'
 import { RepositoryPage } from './views/repository'
+import { SettingsPage } from './views/settings'
 
 const rootRoute = createRootRoute({ component: () => <Shell><Outlet /></Shell> })
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage })
@@ -12,8 +13,9 @@ export const organizationRoute = createRoute({
 export const repositoryRoute = createRoute({
   getParentRoute: () => rootRoute, path: '/repo/$owner/$name', component: RepositoryPage
 })
+const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: SettingsPage })
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, organizationRoute, repositoryRoute]),
+  routeTree: rootRoute.addChildren([homeRoute, organizationRoute, repositoryRoute, settingsRoute]),
   history: createHashHistory(),
   defaultPreload: 'intent'
 })
