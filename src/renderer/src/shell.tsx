@@ -1,16 +1,31 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { GitBranch, Globe2, Moon, Sun } from 'lucide-react'
+import { GitBranch, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Button } from './components/ui/button'
 import { UpdateDialog } from './components/update-dialog'
-import { AccountIdentity } from './components/account-identity'
+import { AccountShortcut } from './components/account-identity'
 import { ActivityDialog } from './components/activity-dialog'
 
-type Theme = 'dark' | 'light'
+export type Theme = 'dark' | 'light'
+export type Language = 'hu' | 'en'
+type Appearance = {
+  theme: Theme
+  setTheme: (value: Theme) => void
+  language: Language
+  setLanguage: (value: Language) => void
+}
+const AppearanceContext = createContext<Appearance | null>(null)
+
+export function useAppearance(): Appearance {
+  const context = useContext(AppearanceContext)
+  if (!context) throw new Error('Appearance context is unavailable')
+  return context
+}
+
 function initialTheme(): Theme {
   return localStorage.getItem('spindle.theme') === 'light' ? 'light' : 'dark'
 }
+
 export function Shell({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(initialTheme)
   const { t, i18n } = useTranslation()
@@ -18,12 +33,12 @@ export function Shell({ children }: { children: ReactNode }) {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     localStorage.setItem('spindle.theme', theme)
   }, [theme])
-  const switchLanguage = () => {
-    const next = i18n.language === 'hu' ? 'en' : 'hu'
+  const setLanguage = (next: Language) => {
     void i18n.changeLanguage(next)
     localStorage.setItem('spindle.language', next)
   }
-  return <div className="min-h-screen">
+  const language: Language = i18n.language === 'hu' ? 'hu' : 'en'
+  return <AppearanceContext.Provider value={{ theme, setTheme, language, setLanguage }}><div className="min-h-screen">
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-xl">
       <div className="flex h-14 w-full items-center justify-between gap-3 px-5 lg:px-8">
         <Link to="/" className="flex items-center gap-3 text-[var(--fg)] no-underline">
@@ -35,18 +50,16 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </Link>
         <div className="flex items-center gap-2">
-          <AccountIdentity/>
+          <AccountShortcut/>
           <ActivityDialog/>
           <UpdateDialog/>
-          <Button variant="ghost" size="icon" title={t('language')} aria-label={t('language')} onClick={switchLanguage}>
-            <Globe2 className="size-4"/><span className="absolute mt-7 ml-6 text-[9px] font-bold">{i18n.language.toUpperCase()}</span>
-          </Button>
-          <Button variant="ghost" size="icon" title={t('theme')} aria-label={t('theme')} onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}>
-            {theme === 'dark' ? <Sun className="size-4"/> : <Moon className="size-4"/>}
-          </Button>
+          <Link to="/settings" title={t('settingsTitle')} aria-label={t('settingsTitle')}
+            className="flex size-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60">
+            <Settings2 className="size-4"/>
+          </Link>
         </div>
       </div>
     </header>
     <main className="w-full px-5 pb-12 pt-6 lg:px-8">{children}</main>
-  </div>
+  </div></AppearanceContext.Provider>
 }
