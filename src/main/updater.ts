@@ -10,8 +10,8 @@ import { detectLinuxPackage } from './package-type'
 import { verifyRunningDebPackage } from './deb-preflight'
 import { failedUpdateOperation, formatUpdateDiagnostics } from '../shared/update-diagnostics'
 import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
-import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
-import { UpdatePreferencesStore, validateUpdatePreferences, type UpdatePreferences } from './update-preferences'
+import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdatePreferences, type UpdateStatus } from '../shared/update-policy'
+import { UpdatePreferencesStore, validateUpdatePreferences } from './update-preferences'
 
 type UpdateInfo = {
   version: string
