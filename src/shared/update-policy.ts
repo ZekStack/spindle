@@ -1,3 +1,5 @@
+export interface UpdatePreferences { includePrereleases: boolean }
+
 export interface ReleaseVersion {
   major: number
   minor: number
