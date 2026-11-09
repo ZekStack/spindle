@@ -191,6 +191,8 @@ export function registerIpc(window: BrowserWindow, store: WorkspaceStore, github
   handle('spindle:auth:managed-signout', () => githubDeviceAuth.signOut())
   handle('spindle:github:open', async (url: string) => { await shell.openExternal(parseGitHubUrl(url)) })
   handle('spindle:update:state', () => updates.snapshot())
+  handle('spindle:update:preferences', () => updates.getPreferences())
+  handle('spindle:update:set-preferences', (value: unknown) => updates.setPreferences(value))
   handle('spindle:update:check', () => updates.check(true))
   handle('spindle:update:download', () => updates.download())
   handle('spindle:update:install', () => updates.install())
