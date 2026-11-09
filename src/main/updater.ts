@@ -11,6 +11,7 @@ import { verifyRunningDebPackage } from './deb-preflight'
 import { failedUpdateOperation, formatUpdateDiagnostics } from '../shared/update-diagnostics'
 import { clearInstallAttempt, previousInstallUnapplied, recordInstallAttempt } from './update-attempt'
 import { isEligibleUpdate, isPrereleaseVersion, updateErrorMessage, type UpdateStatus } from '../shared/update-policy'
+import { UpdatePreferencesStore, validateUpdatePreferences, type UpdatePreferences } from './update-preferences'
 
 type UpdateInfo = {
   version: string
@@ -55,6 +56,8 @@ export class UpdateManager {
   private readonly attemptFile: string | null
   private readonly linuxPackage: ReturnType<typeof detectLinuxPackage>
   private lastCompletedCheckAt: number | null = null
+  private includePrereleases = false
+  private preferencesError = false
 
   constructor(
     private readonly updater: Updater = desktopUpdater(),
@@ -66,7 +69,8 @@ export class UpdateManager {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) window.webContents.send('spindle:update:status', state)
       }
-    }
+    },
+    private readonly preferences = new UpdatePreferencesStore(join(app.getPath('userData'), 'update-preferences.json'))
   ) {
     this.linuxPackage = runtime.platform === 'linux' ? detectLinuxPackage(process.resourcesPath) : 'unknown'
     this.attemptFile = runtime.isPackaged ? join(app.getPath('userData'), 'update-attempt.json') : null
@@ -89,15 +93,21 @@ export class UpdateManager {
     this.updater.logger = null
     this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = false
-    this.updater.allowPrerelease = isPrereleaseVersion(this.state.currentVersion)
-    this.updater.allowDowngrade = false
+    try {
+      this.includePrereleases = this.preferences.load(isPrereleaseVersion(this.state.currentVersion)).includePrereleases
+    } catch {
+      // Fail closed and surface the storage error in Settings. Never overwrite corrupt preferences.
+      this.preferencesError = true
+      this.includePrereleases = false
+    }
+    this.applyChannel()
 
     this.updater.on('checking-for-update', () => {
       if (this.state.phase !== 'downloading' && this.state.phase !== 'ready') this.change({ phase: 'checking' })
     })
     this.updater.on('update-available', (info) => {
       this.downloadedDeb = null
-      if (!isEligibleUpdate(this.state.currentVersion, info.version)) {
+      if (!isEligibleUpdate(this.state.currentVersion, info.version, this.includePrereleases)) {
         this.change({ phase: 'up-to-date', availableVersion: null, failureStage: null })
         return
       }
@@ -138,6 +148,39 @@ export class UpdateManager {
 
   snapshot(): UpdateStatus { return { ...this.state } }
 
+  getPreferences(): UpdatePreferences {
+    if (this.preferencesError) throw new Error('Update preferences could not be loaded')
+    return { includePrereleases: this.includePrereleases }
+  }
+
+  private applyChannel(): void {
+    this.updater.allowPrerelease = this.includePrereleases
+    // Some electron-updater channel setters implicitly enable downgrades.
+    this.updater.allowDowngrade = false
+  }
+
+  async setPreferences(value: unknown): Promise<UpdatePreferences> {
+    const next = validateUpdatePreferences(value)
+    if (this.preferencesError) throw new Error('Update preferences could not be loaded')
+    if (this.checkJob) await this.checkJob
+    if (['downloading', 'ready', 'installing'].includes(this.state.phase)) {
+      throw new Error('Finish or restart the current update before changing channels')
+    }
+    if (next.includePrereleases === this.includePrereleases) return this.getPreferences()
+    this.preferences.save(next)
+    this.includePrereleases = next.includePrereleases
+    this.applyChannel()
+    this.downloadedDeb = null
+    const disabled = this.state.phase === 'disabled'
+    // Discard stale offers: changing channel never installs an old candidate.
+    this.change({
+      phase: disabled ? 'disabled' : 'idle',
+      availableVersion: null, percent: null, message: null, failureStage: null
+    })
+    if (!disabled) void this.check(true)
+    return this.getPreferences()
+  }
+
   diagnosticReport(): string {
     return formatUpdateDiagnostics(this.snapshot(), this.runtime.platform, this.lastCompletedCheckAt)
   }
@@ -176,6 +219,7 @@ export class UpdateManager {
           await verifyRunningDebPackage(process.execPath, this.state.currentVersion)
         }
         const auth = await this.credentials.get()
+        this.applyChannel()
         this.updater.setFeedURL({
           provider: 'github', owner: 'ZekStack', repo: 'spindle',
           private: Boolean(auth.token),
@@ -192,6 +236,10 @@ export class UpdateManager {
     if (this.state.phase === 'ready') return Promise.resolve(this.snapshot())
     if (this.downloadJob) return this.downloadJob
     if (this.state.phase !== 'available') return Promise.reject(new Error('No update is ready for download'))
+    if (!this.state.availableVersion ||
+        !isEligibleUpdate(this.state.currentVersion, this.state.availableVersion, this.includePrereleases)) {
+      return Promise.reject(new Error('The offered update is no longer eligible'))
+    }
     this.lastProgress = -1
     this.downloadedDeb = null
     this.change({ phase: 'downloading', percent: 0, message: null, failureStage: null })
@@ -213,6 +261,9 @@ export class UpdateManager {
       return Promise.reject(new Error('A verified update has not finished downloading'))
     }
     const target = this.state.availableVersion
+    if (!isEligibleUpdate(this.state.currentVersion, target, this.includePrereleases)) {
+      return Promise.reject(new Error('The downloaded update is no longer eligible'))
+    }
     this.change({ phase: 'installing', message: null, failureStage: null })
     this.installJob = (async () => {
       try {
