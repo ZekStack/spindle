@@ -1,29 +1,33 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts', 'validate-next-rc.mjs')
-
-// The Release workflow stamps package.json from the tag before running tests.
-// Fixtures therefore follow that source version instead of assuming 0.1.0.
-// A different release line is generated explicitly for the negative case.
-const sourceVersion: string = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+// Release stamps package.json with -rc.N before running tests. RC preparation
+// itself must validate against a stable source version, so exercise its real
+// CLI in an isolated fixture without mutating the release checkout.
+const sourceManifestVersion: string = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+assert.match(sourceManifestVersion, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?$/)
+const sourceVersion = sourceManifestVersion.replace(/-rc\.(0|[1-9]\d*)$/, '')
 const [major, minor, patch] = sourceVersion.split('.').map(Number)
-assert.match(sourceVersion, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
 const otherVersion = `${major}.${minor}.${patch + 1}`
 const rc = (sequence: string | number) => `v${sourceVersion}-rc.${sequence}`
 
-function validate(tag: string, existingTags: string[]) {
+function validate(tag: string, existingTags: string[], manifestVersion = sourceVersion) {
   const dir = mkdtempSync(join(tmpdir(), 'spindle-rc-'))
   try {
+    const scriptsDir = join(dir, 'scripts')
+    mkdirSync(scriptsDir)
+    copyFileSync(join(root, 'scripts', 'validate-next-rc.mjs'), join(scriptsDir, 'validate-next-rc.mjs'))
+    copyFileSync(join(root, 'scripts', 'prepare-release.mjs'), join(scriptsDir, 'prepare-release.mjs'))
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'spindle', version: manifestVersion }) + '\n')
     const tagsFile = join(dir, 'tags.txt')
     writeFileSync(tagsFile, existingTags.join('\n') + '\n')
-    return spawnSync(process.execPath, [script, tag, tagsFile], {
-      cwd: root, encoding: 'utf8', timeout: 30_000
+    return spawnSync(process.execPath, [join(scriptsDir, 'validate-next-rc.mjs'), tag, tagsFile], {
+      cwd: dir, encoding: 'utf8', timeout: 30_000
     })
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -66,4 +70,10 @@ test('manual RC validation rejects bad versions, other release lines and injecti
   ]) {
     assert.notEqual(validate(tag, existing).status, 0, tag)
   }
+})
+
+test('manual RC preparation rejects a prerelease-stamped source manifest', () => {
+  const result = validate(rc(9), existing, `${sourceVersion}-rc.8`)
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /does not match package\.json/)
 })
