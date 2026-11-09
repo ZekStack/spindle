@@ -170,7 +170,7 @@ export interface SpindleApi {
   signOutManagedGitHub(): Promise<void>
   openGitHub(url: string): Promise<void>
   getUpdateStatus(): Promise<UpdateStatus>
-  getUpdatePreferences(): Promise<import('../main/update-preferences').UpdatePreferences>
+  getUpdatePreferences(): Promise<import('./update-policy').UpdatePreferences>
   setUpdatePreferences(value: import('../main/update-preferences').UpdatePreferences): Promise<import('../main/update-preferences').UpdatePreferences>
   checkForUpdates(): Promise<UpdateStatus>
   downloadUpdate(): Promise<UpdateStatus>
