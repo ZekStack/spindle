@@ -37,14 +37,18 @@ jobs:
       - name: Tests
         run: pnpm test
       # Release stamps package.json from the tag before running tests.
-      # Exercise that path on PRs, then restore the source version for packaging.
-      - name: Validate RC tests against a stamped release version
+      # Exercise both RC and stable stamps on PRs, then restore the source
+      # manifest before packaging.
+      - name: Validate RC tests against stamped release versions
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
           cp package.json "$RUNNER_TEMP/spindle-package.json"
           trap 'cp "$RUNNER_TEMP/spindle-package.json" package.json' EXIT
+          source_version="$(node -p "require('./package.json').version")"
+          node scripts/prepare-release.mjs --prepare "v${source_version}-rc.9999"
+          pnpm exec tsx --test tests/release-rc.test.ts
           node scripts/prepare-release.mjs --prepare v0.1.1
           pnpm exec tsx --test tests/release-rc.test.ts
       - name: Build
