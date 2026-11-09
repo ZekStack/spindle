@@ -108,8 +108,10 @@ release pipeline that leaves users on the wrong version.
       the tagged AppImage and installs/launches the tagged NSIS package on
       native runners before publish. **Real electron-updater download/restart,
       user consent/cancel, and published-release QA remain open.**
-- [ ] **M0.5 — Channel/diagnostic QA.** Stable installations must ignore RCs;
-      RC installations may advance to newer RCs and stable builds. Keep
+- [ ] **M0.5 — Channel/diagnostic QA.** Stable installations ignore RCs
+      by default but may opt in to newer RCs from Settings; RC installations
+      retain prerelease eligibility by default and may opt out. Neither option
+      permits a version downgrade. Keep
       credentials out of logs and renderer errors; provide useful diagnostic
       context and a manual download fallback.
       Engineering work: [x] release-version policy tests; [x] allowlisted
@@ -504,6 +506,19 @@ failure logs, and rerun a failed job from the application.
       predictable empty/loading/error states; no unnecessary permanent sidebar.
 - [ ] **M6.3 — Preferences.** Clearly organized settings for workspace,
       account, theme, language, update channel and optional release profiles.
+      Engineering work: [x] dedicated Settings route; [x] theme and language
+      controls reuse existing persistent preferences; [x] GitHub identity,
+      encrypted multi-account switching, add/remove, and device authentication
+      moved into Settings with the header avatar linking to it; [x] validated
+      main-process RC opt-in persisted independently from GitHub credentials,
+      with stable/RC defaults, monotonic version checks and explicit user
+      consent before downloads and installs; [x] IPC boundaries and unit
+      regression coverage for preference persistence and corrupt data.
+      **Remaining acceptance:** installed Windows/Linux interactive QA for
+      preference persistence, theme/language, secure account switching,
+      and enabling RC on a stable installation to discover a newer published
+      RC. Workspace preferences and optional release profiles remain future
+      refinements, not part of this first Settings page.
 - [ ] **M6.4 — Diagnostics.** Export sanitized logs and operation history,
       display actionable permission/network/Git errors, and test English
       and Hungarian UI parity.

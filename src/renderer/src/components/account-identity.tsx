@@ -1,10 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleUserRound, ExternalLink, LoaderCircle, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { GitHubIdentity } from '../../../shared/contracts'
 import { Button } from './ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog'
 import { DeviceSignIn } from './device-sign-in'
 import { ManagedAccounts } from './managed-accounts'
 
@@ -15,9 +15,8 @@ function methodLabel(method: GitHubIdentity['method'], t: (key: string) => strin
       : t('identityNoCredentials')
 }
 
-export function AccountIdentity() {
+export function AccountIdentityPanel() {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
   const cache = useQueryClient()
   const identity = useQuery({
     queryKey: ['github-identity'],
@@ -53,22 +52,9 @@ export function AccountIdentity() {
   const problem = identity.isError || (current && !['authenticated', 'anonymous'].includes(current.state))
   const status = current?.state ?? 'unavailable'
 
-  return <Dialog open={open} onOpenChange={setOpen}>
-    <Button variant="ghost" className="max-w-44 gap-2" title={t('identityTitle')}
-      aria-label={t('identityTitle')} onClick={() => setOpen(true)}>
-      {viewer?.avatarUrl
-        ? <img src={viewer.avatarUrl} alt="" className="size-7 rounded-full" />
-        : <CircleUserRound className="size-5 shrink-0" />}
-      <span className="hidden truncate text-xs md:inline">{viewer?.login ?? t('identityAccount')}</span>
-      <span className={`size-1.5 shrink-0 rounded-full ${problem ? 'bg-red-500' :
-        status === 'authenticated' ? 'bg-emerald-500' :
-          unavailable ? 'bg-neutral-500' : 'bg-amber-500'}`}/>
-    </Button>
-    <DialogContent className="max-h-[90vh] overflow-y-auto">
-      <DialogTitle className="text-xl font-semibold">{t('identityTitle')}</DialogTitle>
-      <DialogDescription className="mt-2 text-sm text-[var(--muted)]">
-        {t('identityDescription')}
-      </DialogDescription>
+  return <section id="accounts" className="panel scroll-mt-24 p-5 lg:p-6">
+    <h2 className="text-lg font-semibold">{t('identityTitle')}</h2>
+    <p className="mt-1 text-sm text-[var(--muted)]">{t('identityDescription')}</p>
       <div className="mt-5 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
         {viewer ? <div className="flex items-center gap-3">
           {viewer.avatarUrl
@@ -138,6 +124,28 @@ export function AccountIdentity() {
           {t('identityRefresh')}
         </Button>
       </div>
-    </DialogContent>
-  </Dialog>
+  </section>
+}
+
+/** Keep identity visible in the header; account management lives in Settings. */
+export function AccountShortcut() {
+  const { t } = useTranslation()
+  const identity = useQuery({
+    queryKey: ['github-identity'],
+    queryFn: () => window.spindle.getGitHubIdentity(),
+    staleTime: 60_000
+  })
+  const current = identity.data
+  const viewer = current?.state === 'authenticated' ? current.account : null
+  const problem = identity.isError ||
+    (current && !['authenticated', 'anonymous'].includes(current.state))
+  return <Link to="/settings" title={t('identityTitle')} aria-label={t('identityTitle')}
+    className="flex h-9 max-w-44 items-center gap-2 rounded-lg px-2 text-[var(--fg)] no-underline hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60">
+    {viewer?.avatarUrl
+      ? <img src={viewer.avatarUrl} alt="" className="size-7 rounded-full"/>
+      : <CircleUserRound className="size-5 shrink-0 text-[var(--muted)]"/>}
+    <span className="hidden truncate text-xs md:inline">{viewer?.login ?? t('identityAccount')}</span>
+    <span className={`size-1.5 shrink-0 rounded-full ${problem ? 'bg-red-500' :
+      viewer ? 'bg-emerald-500' : 'bg-amber-500'}`}/>
+  </Link>
 }
