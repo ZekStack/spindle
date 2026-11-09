@@ -170,6 +170,9 @@ export class UpdateManager {
     this.preferences.save(next)
     this.includePrereleases = next.includePrereleases
     this.applyChannel()
+    // An unapplied install is a recovery error, not an available update.
+    // Only a user-initiated manual check may clear its persisted warning.
+    if (this.state.message === 'not-installed') return this.getPreferences()
     this.downloadedDeb = null
     const disabled = this.state.phase === 'disabled'
     // Discard stale offers: changing channel never installs an old candidate.
