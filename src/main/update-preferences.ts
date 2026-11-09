@@ -1,9 +1,6 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-
-export interface UpdatePreferences {
-  includePrereleases: boolean
-}
+import type { UpdatePreferences } from '../shared/update-policy'
 
 export function validateUpdatePreferences(value: unknown): UpdatePreferences {
   if (!value || typeof value !== 'object' ||
